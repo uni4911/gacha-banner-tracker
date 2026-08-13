@@ -1,11 +1,11 @@
 import httpx
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from abc import ABC, abstractmethod
 from pathlib import Path
 from bs4 import BeautifulSoup
-from src.models.models import BannerType, Banner
+from src.models.models import BannerType, Banner, Reward
 from curl_cffi import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +24,8 @@ class BaseBannerFetcher(ABC):
         pass
 
 class GenshinBannerFetcher(BaseBannerFetcher):
+
+    game_name = "Genshin Impact"
 
     def _get_html(self, url: str) -> str:
         try:
@@ -68,21 +70,24 @@ class GenshinBannerFetcher(BaseBannerFetcher):
 
             for banner in banners:
                 limited_character_name = [banner.find("p",class_="banner-name").get_text(strip=True)]
+                limited_rewards = [Reward(name=char_name, rarity=5, is_featured=True) for char_name in limited_character_name]
 
                 four_stars_div = banner.find("div",class_="featured-rate-ups")
-                four_stars_chars_names = []
+                four_stars_rewards = []
+    
                 if four_stars_div:
                     four_stars_chars_links = four_stars_div.find_all("a",class_="featured-rate-up")
                     four_stars_chars_names = [a.get_text(strip=True) for a in four_stars_chars_links]
+                    four_stars_rewards = [Reward(name=char_name, rarity=4, is_featured=False) for char_name in four_stars_chars_names]
 
                 banner_date_range = banner.find('strong', attrs={'data-banner-range': 'true'}).get_text(strip=True)
                 start_str, end_str = [d.strip() for d in re.split(r"\s*[\u2013\u2014-]\s*",banner_date_range)]
 
                 date_format = "%b %d, %Y"
-                start_date = datetime.strptime(start_str, date_format)
-                end_date = datetime.strptime(end_str, date_format)
+                start_date = datetime.strptime(start_str, date_format).replace(tzinfo=timezone.utc)
+                end_date = datetime.strptime(end_str, date_format).replace(tzinfo=timezone.utc)
 
-                banners_list.append(Banner(version,BannerType.LIMITED_CHARACTER,limited_character_name,four_stars_chars_names,start_date,end_date,phase))
+                banners_list.append(Banner(version,BannerType.LIMITED_CHARACTER,limited_rewards,four_stars_rewards,start_date,end_date,phase))
 
         return banners_list
 

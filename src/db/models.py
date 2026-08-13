@@ -1,7 +1,8 @@
 from __future__ import annotations
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import String, ForeignKey, JSON
 from datetime import datetime
+from typing import Any
 
 
 class Base(DeclarativeBase):
@@ -38,6 +39,7 @@ class RewardModel(Base):
     name: Mapped[str] = mapped_column(String(100))
     rarity: Mapped[int] = mapped_column()
     is_featured: Mapped[bool] = mapped_column()
+    extra_data: Mapped[dict[str, Any]] = mapped_column(JSON,default=dict)
 
     banner: Mapped[BannerModel] = relationship(back_populates="rewards")
     

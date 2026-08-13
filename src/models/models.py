@@ -1,7 +1,9 @@
+from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum, auto
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from zoneinfo import ZoneInfo
+from typing import Any
 
 class BannerType(Enum):
     LIMITED_CHARACTER = auto()
@@ -20,8 +22,8 @@ class Server(Enum):
 class Banner:
     version: str 
     banner_type: BannerType 
-    limited_rewards: list[str] 
-    low_rate_rewards: list[str]
+    limited_rewards: list[Reward] 
+    low_rate_rewards: list[Reward]
     start_date: datetime
     end_date: datetime
     phase: int
@@ -32,3 +34,10 @@ class Banner:
     def get_start_for_server(self, server: Server) -> datetime:
         utc_time = self.start_date.astimezone(timezone.utc)
         return utc_time.astimezone(ZoneInfo(server.value))
+
+@dataclass
+class Reward:
+    name: str
+    rarity: int
+    is_featured: bool
+    extra_data: dict[str, Any] = field(default_factory=dict)
