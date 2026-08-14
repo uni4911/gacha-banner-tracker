@@ -29,7 +29,17 @@ class Banner:
     phase: int
 
     def is_active(self, current_time: datetime) -> bool:
-        return self.start_date <= current_time <= self.end_date 
+        start_date_aware = self.start_date.replace(tzinfo=timezone.utc)
+        if self.end_date is not None:
+            end_date_aware = self.end_date.replace(tzinfo=timezone.utc)
+        if current_time.tzinfo is not None:
+            current_time = current_time.astimezone(timezone.utc)
+        else:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        
+
+        return current_time >= start_date_aware and (self.end_date is None or current_time <= end_date_aware)
+       
 
     def get_start_for_server(self, server: Server) -> datetime:
         utc_time = self.start_date.astimezone(timezone.utc)

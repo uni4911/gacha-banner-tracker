@@ -41,27 +41,32 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
             return ""
 
     def _parse_patch_info(self, section: Tag) -> tuple[str | None, int | None]:
+
         h3_tag = section.find("h3")
+        h3_text = h3_tag.get_text(strip=True) if h3_tag else ""
+        h2_tag = section.find("h2")
+        h2_text = h2_tag.get_text(strip=True) if h2_tag else ""
 
-        if not h3_tag or "Patch" not in h3_tag.text:
-            return (None, None)
+        if "Patch" in h3_text:
+            version_phase_text = h3_text
 
-        version_phase_text = section.find("h3").text
+            version_pattern = r"Patch\s+(\d+\.\d+)"
+            version_match = re.search(version_pattern, version_phase_text)
 
-        version_pattern = r"Patch\s+(\d+\.\d+)"
-        version_match = re.search(version_pattern, version_phase_text)
+            phase_pattern = r"Phase\s+(\d+)"
+            phase_match = re.search(phase_pattern, version_phase_text)
 
-        phase_pattern = r"Phase\s+(\d+)"
-        phase_match = re.search(phase_pattern, version_phase_text)
-
-        if version_match and phase_match:
-            version = version_match.group(1)
-            phase = int(phase_match.group(1))
+            if version_match and phase_match:
+                version = version_match.group(1)
+                phase = int(phase_match.group(1))
+            else:
+                version = "0.0"
+                phase = 1
+            return (version, phase)
+        elif "Upcoming" in h3_text or "Upcoming" in h2_text:
+            return ("Upcoming",0)
         else:
-            version = "0.0"
-            phase = 1
-
-        return (version, phase)
+            return (None, None)
 
 
     def _parse_limited_rewards(self, banner: Tag) -> list[Reward]:
@@ -100,15 +105,14 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
         return (start_date, end_date)
 
     def _determine_banner_type(self, banner: Tag) -> BannerType:
-        tag = banner.find("span", class_="rarity")
-        if not tag:
+        classes = banner.get("class",[])
+        if "weapon-banner-card" in classes:
+            return BannerType.LIMITED_WEAPON
+        elif "character-banner-card" in classes:
             return BannerType.LIMITED_CHARACTER
-
-        banner_type = tag.get_text(strip=True).lower(   )
-        for keyword in self.WEAPON_KEYWORDS:
-            if keyword in banner_type:
-                return BannerType.LIMITED_WEAPON
-        return BannerType.LIMITED_CHARACTER
+        else:
+            logger.error("Nie znaleziono typu baneru")
+            return BannerType.LIMITED_CHARACTER
         
             
     def fetch_banners(self) -> list[Banner]:
@@ -122,8 +126,7 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
             if version is None:
                 continue
             banners = section.find_all("article",class_="banner-card")
-            
-
+    
             for banner in banners:
                 limited_rewards = self._parse_limited_rewards(banner)
                 four_stars_rewards = self._parse_rate_up_rewards(banner)
