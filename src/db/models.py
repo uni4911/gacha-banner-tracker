@@ -26,7 +26,7 @@ class BannerModel(Base):
     phase: Mapped[int] = mapped_column()
     banner_type: Mapped[str] = mapped_column()
     start_date: Mapped[datetime] = mapped_column()
-    end_date: Mapped[datetime] = mapped_column()
+    end_date: Mapped[datetime|None] = mapped_column()
 
     game: Mapped[GameModel] = relationship(back_populates="banners")
     rewards: Mapped[list[RewardModel]] = relationship(back_populates="banner")

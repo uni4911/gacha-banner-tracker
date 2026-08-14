@@ -25,7 +25,7 @@ class Banner:
     limited_rewards: list[Reward] 
     low_rate_rewards: list[Reward]
     start_date: datetime
-    end_date: datetime
+    end_date: datetime|None
     phase: int
 
     def is_active(self, current_time: datetime) -> bool:
