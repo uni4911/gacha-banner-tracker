@@ -24,7 +24,7 @@ def test_fetch_banners_succses(mock_get_html, mock_genshin_html):
 
     mock_get_html.return_value = mock_genshin_html
 
-    genshin_fetcher = GenshinBannerFetcher()
+    genshin_fetcher = GenshinBannerFetcher(mock_genshin_html, "Genshin Impact")
     banners = genshin_fetcher.fetch_banners()
 
     assert len(banners) == 1
