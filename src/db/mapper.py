@@ -1,8 +1,8 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
-from src.models.models import Banner, Reward, BannerType
-from src.db.models import BannerModel, RewardModel
+from src.models.models import Banner, Reward, BannerType, Game
+from src.db.models import BannerModel, RewardModel, GameModel
 
 
 class RewardMapper:
@@ -107,8 +107,32 @@ class BannerMapper:
         )
 
 
+class GameMapper:
+    """Mapper for converting between Game (domain) and GameModel (database)."""
+
+    @staticmethod
+    def to_model(game: Game) -> GameModel:
+        """Converts a domain Game to a database GameModel."""
+        game_model = GameModel(name=game.name)
+        if game.banners:
+            game_model.banners = [BannerMapper.to_model(b) for b in game.banners]
+        return game_model
+
+    @staticmethod
+    def to_domain(model: GameModel) -> Game:
+        """Converts a database GameModel to a domain Game."""
+        banners = (
+            [BannerMapper.to_domain(b) for b in model.banners]
+            if model.banners
+            else []
+        )
+        return Game(name=model.name, banners=banners)
+
+
 # Convenience standalone functions
 reward_to_model = RewardMapper.to_model
 model_to_reward = RewardMapper.to_domain
 banner_to_model = BannerMapper.to_model
 model_to_banner = BannerMapper.to_domain
+game_to_model = GameMapper.to_model
+model_to_game = GameMapper.to_domain

@@ -96,4 +96,4 @@ def get_banners_by_version(game_name: str, version: str) -> list[Banner]:
         ).options(selectinload(BannerModel.rewards))
 
         banner_models = db.scalars(stmt).all()
-        return [BannerModel.to_domain(model) for model in banner_models]
+        return [BannerMapper.to_domain(model) for model in banner_models]

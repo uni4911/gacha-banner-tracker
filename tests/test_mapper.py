@@ -1,14 +1,17 @@
 from datetime import datetime, timezone
 import pytest
-from src.models.models import Banner, BannerType, Reward
-from src.db.models import BannerModel, RewardModel
+from src.models.models import Banner, BannerType, Reward, Game
+from src.db.models import BannerModel, RewardModel, GameModel
 from src.db.mapper import (
     BannerMapper,
     RewardMapper,
+    GameMapper,
     banner_to_model,
     model_to_banner,
     reward_to_model,
     model_to_reward,
+    game_to_model,
+    model_to_game,
 )
 
 
@@ -139,3 +142,38 @@ def test_standalone_function_aliases():
     b_domain = model_to_banner(bmodel)
     assert b_domain.banner_type == BannerType.STANDARD_CHARACTER
     assert b_domain.end_date is None
+
+    game = Game(name="Genshin Impact", banners=[banner])
+    gmodel = game_to_model(game)
+    assert gmodel.name == "Genshin Impact"
+    assert len(gmodel.banners) == 1
+    g_domain = model_to_game(gmodel)
+    assert g_domain.name == "Genshin Impact"
+    assert len(g_domain.banners) == 1
+
+
+def test_game_mapper():
+    banner = Banner(
+        version="5.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Mualani", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        end_date=None,
+        phase=1,
+    )
+    game = Game(name="Genshin Impact", banners=[banner])
+
+    # Game to Model
+    game_model = GameMapper.to_model(game)
+    assert isinstance(game_model, GameModel)
+    assert game_model.name == "Genshin Impact"
+    assert len(game_model.banners) == 1
+
+    # Model to Game
+    domain_game = GameMapper.to_domain(game_model)
+    assert isinstance(domain_game, Game)
+    assert domain_game.name == "Genshin Impact"
+    assert len(domain_game.banners) == 1
+    assert domain_game.banners[0].version == "5.0"
+

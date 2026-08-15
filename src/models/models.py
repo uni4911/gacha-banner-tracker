@@ -51,3 +51,8 @@ class Reward:
     rarity: int
     is_featured: bool
     extra_data: dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class Game:
+    name: str
+    banners: list[Banner] = field(default_factory=list)
