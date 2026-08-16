@@ -5,6 +5,7 @@ from src.models.models import Banner, Server
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import exists, select, or_
 from datetime import datetime, timezone
+from src.db.mapper import RewardMapper
 
 
 def get_or_create_game(session: Session, game_name: str) -> GameModel:
@@ -153,7 +154,7 @@ def get_upcoming_banners(game_name: str, current_time: datetime, server: Server 
                 GameModel.name == game_name,
             )
             .options(selectinload(BannerModel.rewards))
-            .order_by(BannerModel.start_date.desc())
+            .order_by(BannerModel.start_date.asc())
             .distinct()
         )
         banner_models = db.scalars(stmt).all()

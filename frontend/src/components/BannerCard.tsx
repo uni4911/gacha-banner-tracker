@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import type { Banner, Reward, ServerRegion } from '../types/banner';
-import { Sparkles, Calendar, Clock, Image as ImageIcon, User, Shield, AlertCircle } from 'lucide-react';
+import { getBannerCategory, formatBannerType } from '../types/banner';
+import {
+  Sparkles,
+  Calendar,
+  Clock,
+  Image as ImageIcon,
+  User,
+  Shield,
+  AlertCircle,
+  Sword,
+  Sparkle,
+} from 'lucide-react';
 
 interface BannerCardProps {
   banner: Banner;
   index: number;
+  gameName?: string;
   selectedRegion?: ServerRegion;
 }
 
@@ -52,6 +64,7 @@ function getBannerTimestamp(
 export const BannerCard: React.FC<BannerCardProps> = ({
   banner,
   index,
+  gameName,
   selectedRegion = 'ALL',
 }) => {
   // Update timestamp periodically
@@ -65,25 +78,9 @@ export const BannerCard: React.FC<BannerCardProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Format Banner Type
-  const formatBannerType = (type: string) => {
-    switch (type) {
-      case 'LIMITED_CHARACTER':
-        return 'Limited Character';
-      case 'LIMITED_WEAPON':
-        return 'Limited Weapon';
-      case 'STANDARD_CHARACTER':
-        return 'Standard Character';
-      case 'STANDARD_WEAPON':
-        return 'Standard Weapon';
-      case 'CHRONICLED':
-        return 'Chronicled Wish';
-      case 'STANDARD_WEAPON_AND_CHARACTER':
-        return 'Standard Banner';
-      default:
-        return type.replace(/_/g, ' ');
-    }
-  };
+  const category = getBannerCategory(banner.banner_type);
+  const isWeapon = category === 'WEAPON';
+  const isCharacter = category === 'CHARACTER';
 
   // Format Dates
   const formatDate = (isoString?: string | null, isEnd = false) => {
@@ -102,18 +99,64 @@ export const BannerCard: React.FC<BannerCardProps> = ({
     });
   };
 
-  // Calculate remaining time in only days, hours, and minutes
-  const getRemainingTime = () => {
-    if (!banner.end_date) {
-      return { isPermanent: true, text: 'Permanent Banner', isUrgent: false, progress: 0 };
+  // Calculate remaining or upcoming time
+  const getBannerTimingStatus = () => {
+    const start = getBannerTimestamp(banner.start_date, selectedRegion, banner.phase, false);
+
+    // Case 1: Banner hasn't started yet (Upcoming)
+    if (start > now) {
+      const diffMs = start - now;
+      const totalMinutes = Math.floor(diffMs / (1000 * 60));
+      const days = Math.floor(totalMinutes / (60 * 24));
+      const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+      const minutes = totalMinutes % 60;
+
+      let text = '';
+      if (days > 0) {
+        text = `${days}d ${hours}h ${minutes}m`;
+      } else if (hours > 0) {
+        text = `${hours}h ${minutes}m`;
+      } else if (minutes > 0) {
+        text = `${minutes}m`;
+      } else {
+        text = '< 1m';
+      }
+
+      return {
+        isUpcoming: true,
+        isPermanent: false,
+        text,
+        isUrgent: false,
+        progress: 0,
+        label: `Starts in ${text}`,
+      };
     }
 
+    // Case 2: Permanent Banner
+    if (!banner.end_date) {
+      return {
+        isUpcoming: false,
+        isPermanent: true,
+        text: 'Permanent',
+        isUrgent: false,
+        progress: 0,
+        label: 'Permanent Banner',
+      };
+    }
+
+    // Case 3: Active Banner with End Date
     const end = getBannerTimestamp(banner.end_date, selectedRegion, banner.phase, true);
-    const start = getBannerTimestamp(banner.start_date, selectedRegion, banner.phase, false);
     const diffMs = end - now;
 
     if (diffMs <= 0) {
-      return { isPermanent: false, text: 'Banner Ended', isUrgent: true, progress: 100 };
+      return {
+        isUpcoming: false,
+        isPermanent: false,
+        text: 'Ended',
+        isUrgent: true,
+        progress: 100,
+        label: 'Banner Ended',
+      };
     }
 
     const totalDuration = end - start;
@@ -138,10 +181,17 @@ export const BannerCard: React.FC<BannerCardProps> = ({
       text = '< 1m';
     }
 
-    return { isPermanent: false, text, isUrgent, progress, days, hours, minutes };
+    return {
+      isUpcoming: false,
+      isPermanent: false,
+      text,
+      isUrgent,
+      progress,
+      label: `Ends in ${text}`,
+    };
   };
 
-  const remaining = getRemainingTime();
+  const timing = getBannerTimingStatus();
 
   // Extract 5-star rewards (featured limited) and 4-star rate ups
   const fiveStarRewards: Reward[] =
@@ -168,12 +218,19 @@ export const BannerCard: React.FC<BannerCardProps> = ({
   };
 
   const featuredWishUrl = getFeaturedWishUrl();
+  const formattedType = formatBannerType(banner.banner_type, gameName);
 
   return (
     <article
-      className="banner-card animate-fade-in"
-      style={{ animationDelay: `${index * 0.08}s` }}
+      className={`banner-card banner-card--${category.toLowerCase()} ${
+        timing.isUpcoming ? 'banner-card--upcoming' : 'banner-card--active'
+      } animate-fade-in`}
+      style={{ animationDelay: `${index * 0.06}s` }}
+      data-category={category}
     >
+      {/* Category Indicator Accent Header Bar */}
+      <div className={`card-category-strip strip--${category.toLowerCase()}`} />
+
       {/* Banner Graphic Slot (Wish Art / Splash or Patterned Fallback) */}
       <div className="banner-graphic-placeholder">
         {featuredWishUrl ? (
@@ -193,44 +250,72 @@ export const BannerCard: React.FC<BannerCardProps> = ({
           </>
         ) : (
           <>
-            <div className="placeholder-pattern" />
+            <div className={`placeholder-pattern pattern--${category.toLowerCase()}`} />
             <div className="placeholder-content">
-              <div className="placeholder-icon-pill">
-                <ImageIcon size={18} className="placeholder-icon" />
-                <span>Banner Graphic Area</span>
+              <div className={`placeholder-icon-pill pill--${category.toLowerCase()}`}>
+                {isWeapon ? (
+                  <Shield size={16} className="placeholder-icon" />
+                ) : isCharacter ? (
+                  <User size={16} className="placeholder-icon" />
+                ) : (
+                  <ImageIcon size={16} className="placeholder-icon" />
+                )}
+                <span>
+                  {isWeapon ? 'Weapon / Light Cone Art' : isCharacter ? 'Character Art' : 'Banner Graphic'}
+                </span>
               </div>
-              <span className="placeholder-subtext">Slot reserved for official banner art</span>
+              <span className="placeholder-subtext">Slot reserved for official event art</span>
             </div>
           </>
         )}
 
-        {/* Overlay Badges */}
+        {/* Overlay Badges Top */}
         <div className="graphic-overlay-top">
-          <span className="version-badge">
+          <span className={`version-badge ${timing.isUpcoming ? 'version-badge--upcoming' : ''}`}>
+            {timing.isUpcoming && <span className="upcoming-pulse-dot" title="Upcoming Banner" />}
             v{banner.version} {banner.phase > 0 ? `• Phase ${banner.phase}` : ''}
           </span>
-          <span className="banner-type-badge">
-            {formatBannerType(banner.banner_type)}
+
+          <span className={`banner-type-badge badge--${category.toLowerCase()}`}>
+            {isWeapon ? (
+              <Shield size={12} className="type-icon" />
+            ) : isCharacter ? (
+              <Sword size={12} className="type-icon" />
+            ) : (
+              <Sparkle size={12} className="type-icon" />
+            )}
+            <span>{formattedType}</span>
           </span>
         </div>
 
-        {/* Countdown Pill with only hours and minutes */}
+        {/* Countdown Pill Bottom */}
         <div className="graphic-overlay-bottom">
-          <span className={`countdown-pill ${remaining.isUrgent ? 'urgent' : ''}`}>
-            {remaining.isUrgent ? <AlertCircle size={13} /> : <Clock size={13} />}
-            <span className="countdown-time-digits">
-              {remaining.isPermanent ? 'Permanent' : `Ends in ${remaining.text}`}
-            </span>
+          <span
+            className={`countdown-pill ${
+              timing.isUpcoming ? 'upcoming' : timing.isUrgent ? 'urgent' : 'active'
+            }`}
+          >
+            {timing.isUpcoming ? (
+              <Clock size={13} className="countdown-icon" />
+            ) : timing.isUrgent ? (
+              <AlertCircle size={13} className="countdown-icon" />
+            ) : (
+              <Clock size={13} className="countdown-icon" />
+            )}
+            <span className="countdown-time-digits">{timing.label}</span>
           </span>
         </div>
       </div>
 
       {/* Progress Bar for Active Banner */}
-      {!remaining.isPermanent && (
-        <div className="banner-progress-track" title={`${remaining.progress.toFixed(1)}% elapsed`}>
+      {!timing.isPermanent && !timing.isUpcoming && (
+        <div
+          className="banner-progress-track"
+          title={`${timing.progress.toFixed(1)}% time elapsed`}
+        >
           <div
-            className="banner-progress-bar"
-            style={{ width: `${remaining.progress}%` }}
+            className={`banner-progress-bar bar--${category.toLowerCase()}`}
+            style={{ width: `${timing.progress}%` }}
           />
         </div>
       )}
@@ -238,13 +323,15 @@ export const BannerCard: React.FC<BannerCardProps> = ({
       {/* Card Body */}
       <div className="banner-card-body">
         {/* 5-Star Featured Section */}
-        <div className="featured-section">
+        <div className={`featured-section featured--${category.toLowerCase()}`}>
           <div className="featured-header">
             <div className="stars-row five-star-stars">
               <Sparkles size={14} className="star-icon" />
-              <span>★★★★★ 5-STAR FEATURED</span>
+              <span>
+                ★★★★★ 5-STAR {isWeapon ? 'FEATURED WEAPON' : 'FEATURED CHARACTER'}
+              </span>
             </div>
-            <span className="rate-boost-tag">Rate Up</span>
+            <span className={`rate-boost-tag tag--${category.toLowerCase()}`}>Rate Up</span>
           </div>
 
           <div className="five-star-list">
@@ -253,7 +340,7 @@ export const BannerCard: React.FC<BannerCardProps> = ({
                 const iconUrl = getRewardIconUrl(reward);
                 return (
                   <div key={i} className="five-star-item">
-                    <div className="reward-avatar-placeholder gold-glow">
+                    <div className={`reward-avatar-placeholder gold-glow avatar--${category.toLowerCase()}`}>
                       {iconUrl ? (
                         <img
                           src={iconUrl}
@@ -267,20 +354,30 @@ export const BannerCard: React.FC<BannerCardProps> = ({
                         />
                       ) : (
                         <>
-                          <User size={20} className="avatar-icon" />
-                          <span className="avatar-placeholder-label">5★ Art</span>
+                          {isWeapon ? (
+                            <Shield size={20} className="avatar-icon" />
+                          ) : (
+                            <User size={20} className="avatar-icon" />
+                          )}
+                          <span className="avatar-placeholder-label">5★</span>
                         </>
                       )}
                     </div>
                     <div className="reward-details">
                       <h3 className="five-star-name">{reward.name}</h3>
-                      <span className="reward-type-label">Featured Exclusive Rate-Up</span>
+                      <span className="reward-type-label">
+                        {isWeapon
+                          ? 'Featured Exclusive Light Cone / Weapon'
+                          : 'Featured Exclusive Character'}
+                      </span>
                     </div>
                   </div>
                 );
               })
             ) : (
-              <div className="empty-reward-note">Featured 5★ Character / Weapon</div>
+              <div className="empty-reward-note">
+                {isWeapon ? 'Featured 5★ Weapon' : 'Featured 5★ Character'}
+              </div>
             )}
           </div>
         </div>
@@ -289,7 +386,9 @@ export const BannerCard: React.FC<BannerCardProps> = ({
         {fourStarRewards.length > 0 && (
           <div className="four-star-section">
             <div className="four-star-header">
-              <span className="four-star-title">★★★★ 4-STAR RATE-UP CHARACTERS</span>
+              <span className="four-star-title">
+                ★★★★ 4-STAR RATE-UP {isWeapon ? 'EQUIPMENT' : 'CHARACTERS'}
+              </span>
             </div>
             <div className="four-star-chips-grid">
               {fourStarRewards.map((reward, i) => {
@@ -309,7 +408,7 @@ export const BannerCard: React.FC<BannerCardProps> = ({
                       />
                     ) : (
                       <div className="mini-avatar-placeholder">
-                        <Shield size={12} />
+                        {isWeapon ? <Shield size={12} /> : <User size={12} />}
                       </div>
                     )}
                     <span className="four-star-name">{reward.name}</span>
@@ -325,7 +424,7 @@ export const BannerCard: React.FC<BannerCardProps> = ({
           <div className="schedule-item">
             <Calendar size={14} className="footer-icon" />
             <span className="schedule-label">
-              {selectedRegion !== 'ALL' ? `${selectedRegion} Server Time:` : 'Duration:'}
+              {selectedRegion !== 'ALL' ? `${selectedRegion} Server:` : 'Event Period:'}
             </span>
             <span className="schedule-value">
               {formatDate(banner.start_date, false)} — {formatDate(banner.end_date, true)}

@@ -1,9 +1,15 @@
 import React from 'react';
 
-export const BannerSkeleton: React.FC = () => {
+interface BannerSkeletonProps {
+  count?: number;
+}
+
+export const BannerSkeleton: React.FC<BannerSkeletonProps> = ({ count = 4 }) => {
+  const items = Array.from({ length: count }, (_, i) => i + 1);
+
   return (
     <div className="banner-skeleton-grid">
-      {[1, 2].map((n) => (
+      {items.map((n) => (
         <div key={n} className="banner-card-skeleton">
           <div className="skeleton-graphic-area shimmer-effect" />
           <div className="skeleton-body">

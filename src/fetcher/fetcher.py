@@ -8,7 +8,7 @@ from src.models.models import BannerType, Banner, Reward
 from curl_cffi import requests
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 LOG_DIR = PROJECT_ROOT/ "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 logger = logging.getLogger(__name__)

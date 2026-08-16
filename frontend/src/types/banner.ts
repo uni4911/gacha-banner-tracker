@@ -136,3 +136,49 @@ export function resolveGameOption(name: string): GameOption {
   };
 }
 
+export type BannerCategory = 'CHARACTER' | 'WEAPON' | 'SPECIAL';
+export type BannerStatusTab = 'active' | 'upcoming' | 'all';
+export type BannerCategoryFilter = 'all' | 'character' | 'weapon';
+export type BannerLayoutMode = 'categorized' | 'grid';
+
+export function getBannerCategory(bannerType: BannerType | string): BannerCategory {
+  const t = (bannerType || '').toUpperCase();
+  if (t.includes('WEAPON') || t.includes('LIGHT_CONE')) {
+    return 'WEAPON';
+  }
+  if (t.includes('CHARACTER')) {
+    return 'CHARACTER';
+  }
+  return 'SPECIAL';
+}
+
+export function formatBannerType(type: string, gameName?: string): string {
+  const g = (gameName || '').toLowerCase();
+  const isStarRail = g.includes('star rail') || g.includes('hsr');
+  const isWuWa = g.includes('wuthering') || g.includes('wuwa');
+  const isGenshin = g.includes('genshin');
+
+  switch (type) {
+    case 'LIMITED_CHARACTER':
+      if (isStarRail) return 'Character Event Warp';
+      if (isWuWa) return 'Character Convene';
+      if (isGenshin) return 'Character Event Wish';
+      return 'Limited Character';
+    case 'LIMITED_WEAPON':
+      if (isStarRail) return 'Light Cone Event Warp';
+      if (isWuWa) return 'Weapon Convene';
+      if (isGenshin) return 'Weapon Event Wish (Epitome)';
+      return 'Limited Weapon';
+    case 'STANDARD_CHARACTER':
+      return 'Standard Character';
+    case 'STANDARD_WEAPON':
+      return isStarRail ? 'Standard Light Cone' : 'Standard Weapon';
+    case 'CHRONICLED':
+      return 'Chronicled Wish';
+    case 'STANDARD_WEAPON_AND_CHARACTER':
+      return 'Standard Banner';
+    default:
+      return type.replace(/_/g, ' ');
+  }
+}
+

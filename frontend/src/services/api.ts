@@ -23,7 +23,8 @@ async function tryFetch(url: string, timeoutMs = 4000): Promise<Response> {
   }
 }
 
-export async function fetchActiveBanners(
+async function fetchBannersFromEndpoint(
+  endpoint: 'active' | 'upcoming',
   gameName: string,
   serverRegion: ServerRegion = 'ALL'
 ): Promise<Banner[]> {
@@ -34,7 +35,7 @@ export async function fetchActiveBanners(
   }
 
   const queryString = params.toString() ? `?${params.toString()}` : '';
-  const path = `/games/${encodeURIComponent(gameName)}/banners/active${queryString}`;
+  const path = `/games/${encodeURIComponent(gameName)}/banners/${endpoint}${queryString}`;
 
   let response: Response | null = null;
   let lastStatus = 0;
@@ -90,6 +91,20 @@ export async function fetchActiveBanners(
   throw new Error(
     `Cannot connect to FastAPI backend. Please make sure the backend is running with: uvicorn src.api.app:app --reload --port 8000`
   );
+}
+
+export async function fetchActiveBanners(
+  gameName: string,
+  serverRegion: ServerRegion = 'ALL'
+): Promise<Banner[]> {
+  return fetchBannersFromEndpoint('active', gameName, serverRegion);
+}
+
+export async function fetchUpcomingBanners(
+  gameName: string,
+  serverRegion: ServerRegion = 'ALL'
+): Promise<Banner[]> {
+  return fetchBannersFromEndpoint('upcoming', gameName, serverRegion);
 }
 
 export async function checkApiHealth(): Promise<boolean> {
