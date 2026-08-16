@@ -86,6 +86,21 @@ def save_banners_to_db(banners: list[Banner], game_name: str) -> None:
                     matched_banner.start_date = banner_data.start_date
                 if banner_data.end_date is not None:
                     matched_banner.end_date = banner_data.end_date
+
+                # Update or add reward extra_data
+                existing_rewards_by_name = {r.name: r for r in matched_banner.rewards}
+                for new_reward in banner_data.limited_rewards + banner_data.low_rate_rewards:
+                    if new_reward.name in existing_rewards_by_name:
+                        r_model = existing_rewards_by_name[new_reward.name]
+                        updated_data = dict(r_model.extra_data or {})
+                        if new_reward.extra_data:
+                            updated_data.update(new_reward.extra_data)
+                        r_model.extra_data = updated_data
+                        r_model.rarity = new_reward.rarity
+                        r_model.is_featured = new_reward.is_featured
+                    else:
+                        new_r_model = RewardMapper.to_model(new_reward, banner_id=matched_banner.id)
+                        matched_banner.rewards.append(new_r_model)
             else:
                 banner_model = BannerMapper.to_model(banner_data, game_id=game.id)
                 db.add(banner_model)
@@ -108,7 +123,25 @@ def get_active_banners(game_name: str, current_time: datetime, server: Server | 
         )
         banner_models = db.scalars(stmt).all()
         banners = [BannerMapper.to_domain(model) for model in banner_models]
-        return [b for b in banners if b.is_active(current_time, server=server)]
+        active_banners = [b for b in banners if b.is_active(current_time, server=server)]
+
+        if server is not None:
+            adjusted: list[Banner] = []
+            for b in active_banners:
+                adjusted.append(
+                    Banner(
+                        version=b.version,
+                        banner_type=b.banner_type,
+                        limited_rewards=b.limited_rewards,
+                        low_rate_rewards=b.low_rate_rewards,
+                        start_date=b.get_start_for_server(server),
+                        end_date=b.get_end_for_server(server),
+                        phase=b.phase,
+                    )
+                )
+            return adjusted
+
+        return active_banners
 
 
 def get_upcoming_banners(game_name: str, current_time: datetime, server: Server | None = None) -> list[Banner]:
@@ -136,7 +169,17 @@ def get_upcoming_banners(game_name: str, current_time: datetime, server: Server 
                     else current_time.replace(tzinfo=start_tz.tzinfo)
                 )
                 if start_tz > curr:
-                    upcoming.append(b)
+                    upcoming.append(
+                        Banner(
+                            version=b.version,
+                            banner_type=b.banner_type,
+                            limited_rewards=b.limited_rewards,
+                            low_rate_rewards=b.low_rate_rewards,
+                            start_date=start_tz,
+                            end_date=b.get_end_for_server(server),
+                            phase=b.phase,
+                        )
+                    )
             else:
                 start_utc = (
                     b.start_date

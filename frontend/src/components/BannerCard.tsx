@@ -15,63 +15,38 @@ const REGION_TIMEZONES: Record<ServerRegion, string | undefined> = {
   AMERICA: 'America/New_York',
 };
 
-// Standard server timezone offsets from UTC in hours (HoYoverse servers: Asia=UTC+8, Europe=UTC+1, America=UTC-5)
-const SERVER_UTC_OFFSETS: Record<ServerRegion, number> = {
-  ALL: 1, // Default Europe baseline
-  ASIA: 8,
-  EUROPE: 1,
-  AMERICA: -5,
-};
-
-// Calculate exact UTC timestamp when a target wall-clock time occurs in the specified server timezone
+// Parse exact timestamp from ISO string, with standard fallback if time was saved as midnight
 function getBannerTimestamp(
   isoString: string | null | undefined,
-  region: ServerRegion,
+  _region: ServerRegion,
   phase: number,
   isEnd: boolean
 ): number {
   if (!isoString) return 0;
   const d = new Date(isoString);
+  const rawH = d.getUTCHours();
+  const rawMin = d.getUTCMinutes();
+  const rawS = d.getUTCSeconds();
+
+  // If backend provided an exact time (not 00:00:00 midnight), return exact timestamp
+  if (rawH !== 0 || rawMin !== 0 || rawS !== 0) {
+    return d.getTime();
+  }
+
+  // Fallback for dates saved as midnight (date-only)
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth();
   const day = d.getUTCDate();
 
-  // If the ISO string already contains specific hours/minutes and region is ALL, use direct timestamp
-  const rawH = d.getUTCHours();
-  const rawMin = d.getUTCMinutes();
-  const rawS = d.getUTCSeconds();
-  const isMidnight = rawH === 0 && rawMin === 0 && rawS === 0;
-
-  if (!isMidnight && region === 'ALL') {
-    return d.getTime();
-  }
-
-  // Calculate standard server wall-clock time
-  let wallH: number;
-  let wallMin: number;
-  let wallSec: number;
-
   if (isEnd) {
-    // Phase 1 ends at 17:59:59 server time
-    // Phase 2 ends at 14:59:59 server time (before maintenance)
-    wallH = phase === 2 ? 14 : 17;
-    wallMin = 59;
-    wallSec = 59;
+    // Phase 1 ends at 17:59:59, Phase 2 ends at 14:59:59
+    const endH = phase === 2 ? 14 : 17;
+    return Date.UTC(y, m, day, endH, 59, 59);
   } else {
-    if (phase === 2) {
-      // Phase 2 starts at 18:00:00 server time
-      wallH = 18;
-      wallMin = 0;
-      wallSec = 0;
-    } else {
-      // Phase 1 global launch starts at 06:00 UTC
-      return Date.UTC(y, m, day, 6, 0, 0);
-    }
+    // Phase 1 starts at 06:00:00, Phase 2 starts at 18:00:00
+    const startH = phase === 2 ? 18 : 6;
+    return Date.UTC(y, m, day, startH, 0, 0);
   }
-
-  const offsetHours = SERVER_UTC_OFFSETS[region] ?? 1;
-  // Convert server wall-clock time to UTC: UTC = wallH - offsetHours
-  return Date.UTC(y, m, day, wallH - offsetHours, wallMin, wallSec);
 }
 
 export const BannerCard: React.FC<BannerCardProps> = ({
@@ -179,21 +154,55 @@ export const BannerCard: React.FC<BannerCardProps> = ({
       ? banner.low_rate_rewards
       : (banner.rewards || []).filter((r) => !r.is_featured && r.rarity === 4);
 
+  const getFeaturedWishUrl = (): string | null => {
+    if (!fiveStarRewards.length) return null;
+    const data = fiveStarRewards[0]?.extra_data;
+    if (!data) return null;
+    return data.local_wish || data.wish_url || null;
+  };
+
+  const getRewardIconUrl = (reward: Reward): string | null => {
+    const data = reward.extra_data;
+    if (!data) return null;
+    return data.local_icon || data.icon_url || null;
+  };
+
+  const featuredWishUrl = getFeaturedWishUrl();
+
   return (
     <article
       className="banner-card animate-fade-in"
       style={{ animationDelay: `${index * 0.08}s` }}
     >
-      {/* Graphic Placeholder Slot */}
+      {/* Banner Graphic Slot (Wish Art / Splash or Patterned Fallback) */}
       <div className="banner-graphic-placeholder">
-        <div className="placeholder-pattern" />
-        <div className="placeholder-content">
-          <div className="placeholder-icon-pill">
-            <ImageIcon size={18} className="placeholder-icon" />
-            <span>Banner Graphic Area</span>
-          </div>
-          <span className="placeholder-subtext">Slot reserved for official banner art</span>
-        </div>
+        {featuredWishUrl ? (
+          <>
+            <img
+              src={featuredWishUrl}
+              alt={fiveStarRewards[0]?.name || 'Banner Art'}
+              className="banner-art-img"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                // If image fails to load, hide image element and show fallback
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <div className="banner-art-gradient-overlay" />
+          </>
+        ) : (
+          <>
+            <div className="placeholder-pattern" />
+            <div className="placeholder-content">
+              <div className="placeholder-icon-pill">
+                <ImageIcon size={18} className="placeholder-icon" />
+                <span>Banner Graphic Area</span>
+              </div>
+              <span className="placeholder-subtext">Slot reserved for official banner art</span>
+            </div>
+          </>
+        )}
 
         {/* Overlay Badges */}
         <div className="graphic-overlay-top">
@@ -240,18 +249,36 @@ export const BannerCard: React.FC<BannerCardProps> = ({
 
           <div className="five-star-list">
             {fiveStarRewards.length > 0 ? (
-              fiveStarRewards.map((reward, i) => (
-                <div key={i} className="five-star-item">
-                  <div className="reward-avatar-placeholder gold-glow">
-                    <User size={20} className="avatar-icon" />
-                    <span className="avatar-placeholder-label">5★ Art</span>
+              fiveStarRewards.map((reward, i) => {
+                const iconUrl = getRewardIconUrl(reward);
+                return (
+                  <div key={i} className="five-star-item">
+                    <div className="reward-avatar-placeholder gold-glow">
+                      {iconUrl ? (
+                        <img
+                          src={iconUrl}
+                          alt={reward.name}
+                          className="reward-avatar-img"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <User size={20} className="avatar-icon" />
+                          <span className="avatar-placeholder-label">5★ Art</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="reward-details">
+                      <h3 className="five-star-name">{reward.name}</h3>
+                      <span className="reward-type-label">Featured Exclusive Rate-Up</span>
+                    </div>
                   </div>
-                  <div className="reward-details">
-                    <h3 className="five-star-name">{reward.name}</h3>
-                    <span className="reward-type-label">Featured Exclusive Rate-Up</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="empty-reward-note">Featured 5★ Character / Weapon</div>
             )}
@@ -265,14 +292,30 @@ export const BannerCard: React.FC<BannerCardProps> = ({
               <span className="four-star-title">★★★★ 4-STAR RATE-UP CHARACTERS</span>
             </div>
             <div className="four-star-chips-grid">
-              {fourStarRewards.map((reward, i) => (
-                <div key={i} className="four-star-chip">
-                  <div className="mini-avatar-placeholder">
-                    <Shield size={12} />
+              {fourStarRewards.map((reward, i) => {
+                const iconUrl = getRewardIconUrl(reward);
+                return (
+                  <div key={i} className="four-star-chip">
+                    {iconUrl ? (
+                      <img
+                        src={iconUrl}
+                        alt={reward.name}
+                        className="mini-avatar-img"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="mini-avatar-placeholder">
+                        <Shield size={12} />
+                      </div>
+                    )}
+                    <span className="four-star-name">{reward.name}</span>
                   </div>
-                  <span className="four-star-name">{reward.name}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

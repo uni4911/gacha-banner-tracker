@@ -1,10 +1,18 @@
+export interface RewardExtraData {
+  icon_url?: string;
+  wish_url?: string;
+  local_icon?: string;
+  local_wish?: string;
+  [key: string]: unknown;
+}
+
 export interface Reward {
   id?: number | null;
   banner_id?: number | null;
   name: string;
   rarity: number;
   is_featured: boolean;
-  extra_data?: Record<string, unknown>;
+  extra_data?: RewardExtraData;
 }
 
 export type BannerType =

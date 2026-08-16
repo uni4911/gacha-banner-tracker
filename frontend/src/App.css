@@ -417,7 +417,7 @@
   box-shadow: var(--shadow-lg);
 }
 
-/* Graphic Placeholder Slot */
+/* Graphic Placeholder & Banner Art Slot */
 .banner-graphic-placeholder {
   position: relative;
   width: 100%;
@@ -428,6 +428,34 @@
   justify-content: center;
   overflow: hidden;
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.banner-art-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  transition: transform 0.4s ease;
+  z-index: 1;
+}
+
+.banner-card:hover .banner-art-img {
+  transform: scale(1.04);
+}
+
+.banner-art-gradient-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.4) 0%,
+    rgba(15, 23, 42, 0.1) 40%,
+    rgba(15, 23, 42, 0.75) 100%
+  );
+  z-index: 2;
+  pointer-events: none;
 }
 
 .placeholder-pattern {
@@ -638,6 +666,22 @@
   justify-content: center;
   color: var(--rarity-5-gold-light);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.reward-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.mini-avatar-img {
+  width: 18px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1px solid var(--rarity-4-border);
 }
 
 .avatar-icon {

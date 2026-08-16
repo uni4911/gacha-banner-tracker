@@ -27,6 +27,12 @@ def create_app() -> FastAPI:
     app.include_router(banner_router)
     app.include_router(game_router)
 
+    from pathlib import Path
+    from fastapi.staticfiles import StaticFiles
+
+    image_dir = Path(__file__).resolve().parent.parent.parent / "data" / "images"
+    image_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/images", StaticFiles(directory=str(image_dir)), name="images")
 
     @app.get("/health", tags=["Health"])
     def health_check():

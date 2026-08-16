@@ -6,6 +6,7 @@ from pathlib import Path
 from bs4 import BeautifulSoup, Tag
 from src.models.models import BannerType, Banner, Reward
 from curl_cffi import requests
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LOG_DIR = PROJECT_ROOT/ "logs"
@@ -61,18 +62,48 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
 
 
     def _parse_limited_rewards(self, banner: Tag) -> list[Reward]:
-        limited_character_name = [banner.find("p",class_="banner-name").get_text(strip=True)]
-        limited_rewards = [Reward(name=char_name, rarity=5, is_featured=True) for char_name in limited_character_name]
-        return limited_rewards
+        name_tag = banner.find("p", class_="banner-name")
+        char_name = name_tag.get_text(strip=True) if name_tag else "Featured Banner"
+
+        # Capture banner artwork from Prydwen card as a direct fallback
+        art_img = (
+            banner.find("img", alt=re.compile(r"banner art", re.I))
+            or banner.select_one(".banner-art img")
+            or banner.find("img")
+        )
+        art_url = art_img.get("src") if art_img else None
+
+        extra_data: dict[str, Any] = {}
+        if art_url:
+            extra_data["prydwen_art"] = art_url
+
+        return [Reward(name=char_name, rarity=5, is_featured=True, extra_data=extra_data)]
 
     def _parse_rate_up_rewards(self, banner: Tag) -> list[Reward]:
-        four_stars_div = banner.find("div",class_="featured-rate-ups")
+        four_stars_div = banner.find("div", class_="featured-rate-ups") or banner.find("div", class_="banner-rate-up-icons")
         four_stars_rewards = []
 
         if four_stars_div:
-            four_stars_chars_links = four_stars_div.find_all("a",class_="featured-rate-up")
-            four_stars_chars_names = [a.get_text(strip=True) for a in four_stars_chars_links]
-            four_stars_rewards = [Reward(name=char_name, rarity=4, is_featured=False) for char_name in four_stars_chars_names]
+            four_stars_chars_links = four_stars_div.find_all("a", class_="featured-rate-up")
+            if four_stars_chars_links:
+                for a in four_stars_chars_links:
+                    char_name = a.get_text(strip=True)
+                    img = a.find("img")
+                    icon_url = img.get("src") if img else None
+                    extra = {"prydwen_icon": icon_url} if icon_url else {}
+                    four_stars_rewards.append(Reward(name=char_name, rarity=4, is_featured=False, extra_data=extra))
+            else:
+                for img in four_stars_div.find_all("img"):
+                    alt = img.get("alt", "").strip()
+                    src = img.get("src", "").strip()
+                    if alt or src:
+                        name = alt
+                        if not name and "/characters/" in src:
+                            slug = src.split("/characters/")[-1].split("_")[0].split(".")[0]
+                            name = slug.replace("-", " ").capitalize()
+                        if name:
+                            four_stars_rewards.append(Reward(name=name, rarity=4, is_featured=False, extra_data={"prydwen_icon": src}))
+
         return four_stars_rewards
 
     def _parse_date_range(self, banner: Tag, phase: int | None = None) -> tuple[datetime | None, datetime | None]:
