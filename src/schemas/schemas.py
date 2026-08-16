@@ -19,7 +19,6 @@ class RewardBase(BaseModel):
 class RewardCreate(RewardBase):
     pass
 
-
 class RewardUpdate(BaseModel):
     name: str | None = None
     rarity: int | None = None
@@ -28,7 +27,7 @@ class RewardUpdate(BaseModel):
 
 
 class RewardResponse(RewardBase):
-    id: int
+    id: int | None = None
     banner_id: int | None = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,6 +61,8 @@ class BannerBase(BaseModel):
 class BannerCreate(BannerBase):
     game_id: int | None = None
     rewards: list[RewardCreate] = Field(default_factory=list)
+    limited_rewards: list[RewardCreate] = Field(default_factory=list)
+    low_rate_rewards: list[RewardCreate] = Field(default_factory=list)
 
 
 class BannerUpdate(BaseModel):
@@ -91,9 +92,11 @@ class BannerUpdate(BaseModel):
 
 
 class BannerResponse(BannerBase):
-    id: int
+    id: int | None = None
     game_id: int | None = None
     rewards: list[RewardResponse] = Field(default_factory=list)
+    limited_rewards: list[RewardResponse] = Field(default_factory=list)
+    low_rate_rewards: list[RewardResponse] = Field(default_factory=list)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -114,7 +117,7 @@ class GameUpdate(BaseModel):
 
 
 class GameResponse(GameBase):
-    id: int
+    id: int | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

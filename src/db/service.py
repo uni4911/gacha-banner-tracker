@@ -57,7 +57,7 @@ def get_active_banners(game_name: str, current_time: datetime, server: Server | 
         return [BannerMapper.to_domain(model) for model in banner_models]
 
 
-def get_upcoming_banners(game_name: str, current_time: datetime, server: Server | None) -> list[Banner]:
+def get_upcoming_banners(game_name: str, current_time: datetime, server: Server | None = None) -> list[Banner]:
     with SessionLocal() as db:
         stmt = (
             select(BannerModel)
@@ -89,10 +89,13 @@ def get_character_banner_history(game_name: str, character_name: str) -> list[Ba
 
 def get_banners_by_version(game_name: str, version: str) -> list[Banner]:
     with SessionLocal() as db:
-        stmt =(
+        stmt = (
             select(BannerModel)
             .join(BannerModel.game)
-            .where(BannerModel.version == version)
+            .where(
+                GameModel.name == game_name,
+                BannerModel.version == version
+            )
         ).options(selectinload(BannerModel.rewards))
 
         banner_models = db.scalars(stmt).all()

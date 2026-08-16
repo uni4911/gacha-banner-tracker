@@ -45,6 +45,10 @@ class Banner:
         utc_time = self.start_date.astimezone(timezone.utc)
         return utc_time.astimezone(ZoneInfo(server.value))
 
+    @property
+    def rewards(self) -> list[Reward]:
+        return self.limited_rewards + self.low_rate_rewards
+
 @dataclass
 class Reward:
     name: str
