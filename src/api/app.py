@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.v1.router import api_v1_router
 from src.api.v1.banners import banner_router
+from src.api.v1.games import game_router
 from src.db.database import init_db
 
 
@@ -24,6 +25,8 @@ def create_app() -> FastAPI:
 
     app.include_router(api_v1_router, prefix="/api")
     app.include_router(banner_router)
+    app.include_router(game_router)
+
 
     @app.get("/health", tags=["Health"])
     def health_check():

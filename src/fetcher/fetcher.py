@@ -41,30 +41,21 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
             return ""
 
     def _parse_patch_info(self, section: Tag) -> tuple[str | None, int | None]:
-
         h3_tag = section.find("h3")
         h3_text = h3_tag.get_text(strip=True) if h3_tag else ""
         h2_tag = section.find("h2")
         h2_text = h2_tag.get_text(strip=True) if h2_tag else ""
+        combined_header = f"{h3_text} {h2_text}"
 
-        if "Patch" in h3_text:
-            version_phase_text = h3_text
+        version_match = re.search(r"(?:Patch|Version|v)\s*(\d+\.\d+)", combined_header, re.IGNORECASE)
+        phase_match = re.search(r"Phase\s*(\d+)", combined_header, re.IGNORECASE)
 
-            version_pattern = r"Patch\s+(\d+\.\d+)"
-            version_match = re.search(version_pattern, version_phase_text)
-
-            phase_pattern = r"Phase\s+(\d+)"
-            phase_match = re.search(phase_pattern, version_phase_text)
-
-            if version_match and phase_match:
-                version = version_match.group(1)
-                phase = int(phase_match.group(1))
-            else:
-                version = "0.0"
-                phase = 1
+        if version_match or phase_match:
+            version = version_match.group(1) if version_match else "0.0"
+            phase = int(phase_match.group(1)) if phase_match else 1
             return (version, phase)
-        elif "Upcoming" in h3_text or "Upcoming" in h2_text:
-            return ("Upcoming",0)
+        elif "upcoming" in combined_header.lower():
+            return ("Upcoming", 0)
         else:
             return (None, None)
 
@@ -84,20 +75,39 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
             four_stars_rewards = [Reward(name=char_name, rarity=4, is_featured=False) for char_name in four_stars_chars_names]
         return four_stars_rewards
 
-    def _parse_date_range(self, banner: Tag) -> tuple[datetime | None, datetime | None]:
-
-        banner_date_range = banner.find('strong', attrs={'data-banner-range': 'true'}).get_text(strip=True)
+    def _parse_date_range(self, banner: Tag, phase: int | None = None) -> tuple[datetime | None, datetime | None]:
+        range_tag = banner.find('strong', attrs={'data-banner-range': 'true'})
+        if not range_tag:
+            return (None, None)
+        banner_date_range = range_tag.get_text(strip=True)
         date_format = "%b %d, %Y"
 
         if banner_date_range.lower().startswith("from "):
             date_str = banner_date_range.split("From ", 1)[1].strip()
             start_date = datetime.strptime(date_str, date_format).replace(tzinfo=timezone.utc)
+            if phase == 1:
+                start_date = start_date.replace(hour=6, minute=0, second=0)
+            elif phase == 2:
+                start_date = start_date.replace(hour=18, minute=0, second=0)
             end_date = None 
         else:
             parts = [d.strip() for d in re.split(r"\s*[\u2013\u2014\u2010\u2212-]\s*", banner_date_range) if d.strip()]
             if len(parts) == 2:
                 start_date = datetime.strptime(parts[0], date_format).replace(tzinfo=timezone.utc)
                 end_date = datetime.strptime(parts[1], date_format).replace(tzinfo=timezone.utc)
+
+                # Set accurate start and end hours based on banner phase lifecycle
+                if phase == 1:
+                    # Phase 1 starts after maintenance (~06:00 UTC) and ends at 17:59:59 UTC
+                    start_date = start_date.replace(hour=6, minute=0, second=0)
+                    end_date = end_date.replace(hour=17, minute=59, second=59)
+                elif phase == 2:
+                    # Phase 2 starts at 18:00:00 UTC and ends at 14:59:59 UTC (before patch maintenance)
+                    start_date = start_date.replace(hour=18, minute=0, second=0)
+                    end_date = end_date.replace(hour=14, minute=59, second=59)
+                else:
+                    # Default: active through end of day
+                    end_date = end_date.replace(hour=23, minute=59, second=59)
             else:
                 logger.warning(f"Nie rozpoznano formatu daty: {banner_date_range}")
                 return (None, None)
@@ -130,7 +140,7 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
             for banner in banners:
                 limited_rewards = self._parse_limited_rewards(banner)
                 four_stars_rewards = self._parse_rate_up_rewards(banner)
-                start_date, end_date = self._parse_date_range(banner)
+                start_date, end_date = self._parse_date_range(banner, phase=phase)
 
                 if start_date is None:
                     continue
@@ -145,6 +155,9 @@ class GenshinBannerFetcher(PrydwenBannerFetcher):
 
 class StarrailBannerFetcher(PrydwenBannerFetcher):
     WEAPON_KEYWORDS = ("light cone",)
+
+class WutheringWavesFetcher(PrydwenBannerFetcher):
+    WEAPON_KEYWORDS = ("weapon",)
 
 
              

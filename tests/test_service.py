@@ -178,3 +178,84 @@ def test_get_banners_by_version(test_db):
     v51_banners = service.get_banners_by_version("Genshin Impact", "5.1")
     assert len(v51_banners) == 1
     assert v51_banners[0].limited_rewards[0].name == "Xilonen"
+
+
+def test_server_specific_active_banners(test_db):
+    from src.models.models import Server
+
+    # Phase 1 banner ending Jan 21, 2026 at 17:59:59 server time
+    banner = Banner(
+        version="5.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Mualani", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 1, 1, 6, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 1, 21, 17, 59, 59, tzinfo=timezone.utc),
+        phase=1,
+    )
+    service.save_banners_to_db([banner], "Genshin Impact")
+
+    # At 2026-01-21 12:00:00 UTC:
+    # Asia (UTC+8): 20:00:00 (Past 17:59:59 cutoff -> Expired)
+    # Europe (Europe/Paris, UTC+1): 13:00:00 (Before 17:59:59 cutoff -> Active)
+    # America (America/New_York, UTC-5): 07:00:00 (Before 17:59:59 cutoff -> Active)
+    check_utc = datetime(2026, 1, 21, 12, 0, 0, tzinfo=timezone.utc)
+
+    asia_active = service.get_active_banners("Genshin Impact", check_utc, server=Server.ASIA)
+    europe_active = service.get_active_banners("Genshin Impact", check_utc, server=Server.EUROPE)
+    america_active = service.get_active_banners("Genshin Impact", check_utc, server=Server.AMERICA)
+
+    assert len(asia_active) == 0
+    assert len(europe_active) == 1
+    assert len(america_active) == 1
+
+
+def test_get_all_games(test_db):
+    with test_db() as session:
+        service.get_or_create_game(session, "Honkai: Star Rail")
+        service.get_or_create_game(session, "Genshin Impact")
+        service.get_or_create_game(session, "Zenless Zone Zero")
+        session.commit()
+
+    games = service.get_all_games()
+    assert len(games) == 3
+    names = [g.name for g in games]
+    assert "Genshin Impact" in names
+    assert "Honkai: Star Rail" in names
+    assert "Zenless Zone Zero" in names
+
+
+def test_save_banners_duplicate_prevention(test_db):
+    # First save with version "0.0" (e.g. initial / upcoming scrape)
+    b1 = Banner(
+        version="0.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Anaxa", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 8, 5, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 8, 25, 0, 0, 0, tzinfo=timezone.utc),
+        phase=1,
+    )
+    service.save_banners_to_db([b1], "Honkai: Star Rail")
+
+    active_1 = service.get_banners_by_version("Honkai: Star Rail", "0.0")
+    assert len(active_1) == 1
+
+    # Second save with version "4.4" for the same character and date range
+    b2 = Banner(
+        version="4.4",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Anaxa", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 8, 5, 18, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 8, 25, 14, 59, 59, tzinfo=timezone.utc),
+        phase=2,
+    )
+    service.save_banners_to_db([b2], "Honkai: Star Rail")
+
+    # Verify no duplicate was created and metadata was updated
+    history = service.get_character_banner_history("Honkai: Star Rail", "Anaxa")
+    assert len(history) == 1
+    assert history[0].version == "4.4"
+    assert history[0].phase == 2
+

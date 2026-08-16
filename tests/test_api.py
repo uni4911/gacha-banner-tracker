@@ -225,3 +225,96 @@ def test_v1_prefixed_endpoints(api_client):
     )
     assert resp_active.status_code == 200
     assert len(resp_active.json()) == 1
+
+
+def test_active_banners_with_server_region_param(api_client):
+    # Phase 1 banner ending Jan 21, 2026 at 17:59:59 server time
+    payload = [
+        {
+            "version": "5.0",
+            "phase": 1,
+            "banner_type": "LIMITED_CHARACTER",
+            "start_date": "2026-01-01T06:00:00Z",
+            "end_date": "2026-01-21T17:59:59Z",
+            "limited_rewards": [
+                {"name": "Mualani", "rarity": 5, "is_featured": True}
+            ],
+        }
+    ]
+    api_client.post("/games/Genshin%20Impact/banners", json=payload)
+
+    # At 2026-01-21 12:00:00 UTC (past Asia 17:59 cutoff, but active in Europe and America)
+    check_time = "2026-01-21T12:00:00Z"
+
+    resp_asia = api_client.get(
+        "/games/Genshin%20Impact/banners/active",
+        params={"current_time": check_time, "server": "ASIA"},
+    )
+    assert resp_asia.status_code == 200
+    assert len(resp_asia.json()) == 0
+
+    resp_eu = api_client.get(
+        "/games/Genshin%20Impact/banners/active",
+        params={"current_time": check_time, "server": "EUROPE"},
+    )
+    assert resp_eu.status_code == 200
+    assert len(resp_eu.json()) == 1
+
+    resp_na = api_client.get(
+        "/games/Genshin%20Impact/banners/active",
+        params={"current_time": check_time, "server": "AMERICA"},
+    )
+    assert resp_na.status_code == 200
+    assert len(resp_na.json()) == 1
+
+    # Test IANA timezone string inputs also succeed without 422
+    resp_iana_eu = api_client.get(
+        "/games/Genshin%20Impact/banners/active",
+        params={"current_time": check_time, "server": "Europe/Paris"},
+    )
+    assert resp_iana_eu.status_code == 200
+    assert len(resp_iana_eu.json()) == 1
+
+    resp_iana_asia = api_client.get(
+        "/games/Genshin%20Impact/banners/active",
+        params={"current_time": check_time, "server": "Asia/Shanghai"},
+    )
+    assert resp_iana_asia.status_code == 200
+    assert len(resp_iana_asia.json()) == 0
+
+
+def test_list_games_endpoint(api_client):
+    # Post a banner for Genshin Impact and a banner for Star Rail
+    api_client.post(
+        "/games/Genshin%20Impact/banners",
+        json=[{
+            "version": "5.0",
+            "phase": 1,
+            "banner_type": "LIMITED_CHARACTER",
+            "start_date": "2026-01-01T06:00:00Z",
+            "limited_rewards": [{"name": "Mualani", "rarity": 5, "is_featured": True}],
+        }],
+    )
+    api_client.post(
+        "/games/Zenless%20Zone%20Zero/banners",
+        json=[{
+            "version": "1.0",
+            "phase": 1,
+            "banner_type": "LIMITED_CHARACTER",
+            "start_date": "2026-01-01T06:00:00Z",
+            "limited_rewards": [{"name": "Ellen Joe", "rarity": 5, "is_featured": True}],
+        }],
+    )
+
+    resp = api_client.get("/games")
+    assert resp.status_code == 200
+    games = resp.json()
+    assert len(games) >= 2
+    game_names = [g["name"] for g in games]
+    assert "Genshin Impact" in game_names
+    assert "Zenless Zone Zero" in game_names
+
+    resp_v1 = api_client.get("/api/v1/games")
+    assert resp_v1.status_code == 200
+    assert len(resp_v1.json()) == len(games)
+

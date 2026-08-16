@@ -13,6 +13,11 @@ GAMES_TO_SCRAPE = [
         "url": "https://www.prydwen.gg/star-rail/banners",
         "fetcher_cls": StarrailBannerFetcher
     },
+    {
+            "name": "Wuthering Waves",
+            "url": "https://www.prydwen.gg/wuthering-waves/banners",
+            "fetcher_cls": StarrailBannerFetcher
+    },
 ]
 
 
