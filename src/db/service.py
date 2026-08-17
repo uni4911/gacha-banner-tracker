@@ -17,16 +17,19 @@ def get_or_create_game(session: Session, game_name: str) -> GameModel:
     return game
 
 
-def get_all_games() -> list[GameModel]:
+def get_all_games(db: Session | None = None) -> list[GameModel]:
     """Retrieve all games stored in the database."""
-    with SessionLocal() as db:
+    if db is not None:
         stmt = select(GameModel).order_by(GameModel.name.asc())
         return list(db.scalars(stmt).all())
+    with SessionLocal() as session:
+        stmt = select(GameModel).order_by(GameModel.name.asc())
+        return list(session.scalars(stmt).all())
 
 
-def save_banners_to_db(banners: list[Banner], game_name: str) -> None:
-    with SessionLocal() as db:
-        game = get_or_create_game(db, game_name)
+def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None = None) -> None:
+    def _save(session: Session) -> None:
+        game = get_or_create_game(session, game_name)
         for banner_data in banners:
             if not banner_data.limited_rewards:
                 continue
@@ -44,7 +47,7 @@ def save_banners_to_db(banners: list[Banner], game_name: str) -> None:
                 )
                 .options(selectinload(BannerModel.rewards))
             )
-            existing_candidates = db.scalars(stmt).all()
+            existing_candidates = session.scalars(stmt).all()
 
             matched_banner: BannerModel | None = None
             for eb in existing_candidates:
@@ -104,14 +107,25 @@ def save_banners_to_db(banners: list[Banner], game_name: str) -> None:
                         matched_banner.rewards.append(new_r_model)
             else:
                 banner_model = BannerMapper.to_model(banner_data, game_id=game.id)
-                db.add(banner_model)
-                db.flush()
+                session.add(banner_model)
+                session.flush()
 
-        db.commit()
+        session.commit()
+
+    if db is not None:
+        _save(db)
+    else:
+        with SessionLocal() as session:
+            _save(session)
 
 
-def get_active_banners(game_name: str, current_time: datetime, server: Server | None = None) -> list[Banner]:
-    with SessionLocal() as db:
+def get_active_banners(
+    game_name: str,
+    current_time: datetime,
+    server: Server | None = None,
+    db: Session | None = None,
+) -> list[Banner]:
+    def _query(session: Session) -> list[Banner]:
         stmt = (
             select(BannerModel)
             .join(GameModel)
@@ -122,7 +136,7 @@ def get_active_banners(game_name: str, current_time: datetime, server: Server | 
             .order_by(BannerModel.start_date.desc())
             .distinct()
         )
-        banner_models = db.scalars(stmt).all()
+        banner_models = session.scalars(stmt).all()
         banners = [BannerMapper.to_domain(model) for model in banner_models]
         active_banners = [b for b in banners if b.is_active(current_time, server=server)]
 
@@ -144,9 +158,19 @@ def get_active_banners(game_name: str, current_time: datetime, server: Server | 
 
         return active_banners
 
+    if db is not None:
+        return _query(db)
+    with SessionLocal() as session:
+        return _query(session)
 
-def get_upcoming_banners(game_name: str, current_time: datetime, server: Server | None = None) -> list[Banner]:
-    with SessionLocal() as db:
+
+def get_upcoming_banners(
+    game_name: str,
+    current_time: datetime,
+    server: Server | None = None,
+    db: Session | None = None,
+) -> list[Banner]:
+    def _query(session: Session) -> list[Banner]:
         stmt = (
             select(BannerModel)
             .join(GameModel)
@@ -157,7 +181,7 @@ def get_upcoming_banners(game_name: str, current_time: datetime, server: Server 
             .order_by(BannerModel.start_date.asc())
             .distinct()
         )
-        banner_models = db.scalars(stmt).all()
+        banner_models = session.scalars(stmt).all()
         banners = [BannerMapper.to_domain(model) for model in banner_models]
         
         upcoming: list[Banner] = []
@@ -195,9 +219,19 @@ def get_upcoming_banners(game_name: str, current_time: datetime, server: Server 
                 if start_utc > curr_utc:
                     upcoming.append(b)
         return upcoming
+
+    if db is not None:
+        return _query(db)
+    with SessionLocal() as session:
+        return _query(session)
+
     
-def get_character_banner_history(game_name: str, character_name: str) -> list[Banner]:
-    with SessionLocal() as db:
+def get_character_banner_history(
+    game_name: str,
+    character_name: str,
+    db: Session | None = None,
+) -> list[Banner]:
+    def _query(session: Session) -> list[Banner]:
         stmt = (
             select(BannerModel)
             .join(BannerModel.game).join(BannerModel.rewards).
@@ -205,15 +239,25 @@ def get_character_banner_history(game_name: str, character_name: str) -> list[Ba
                 GameModel.name == game_name,
                 RewardModel.name == character_name
             )
-        .options(selectinload(BannerModel.rewards))
-        .order_by(BannerModel.start_date.desc())
-        .distinct())
-        banner_models = db.scalars(stmt).all()
+            .options(selectinload(BannerModel.rewards))
+            .order_by(BannerModel.start_date.desc())
+            .distinct()
+        )
+        banner_models = session.scalars(stmt).all()
         return [BannerMapper.to_domain(model) for model in banner_models]
 
+    if db is not None:
+        return _query(db)
+    with SessionLocal() as session:
+        return _query(session)
 
-def get_banners_by_version(game_name: str, version: str) -> list[Banner]:
-    with SessionLocal() as db:
+
+def get_banners_by_version(
+    game_name: str,
+    version: str,
+    db: Session | None = None,
+) -> list[Banner]:
+    def _query(session: Session) -> list[Banner]:
         stmt = (
             select(BannerModel)
             .join(BannerModel.game)
@@ -223,5 +267,11 @@ def get_banners_by_version(game_name: str, version: str) -> list[Banner]:
             )
         ).options(selectinload(BannerModel.rewards))
 
-        banner_models = db.scalars(stmt).all()
+        banner_models = session.scalars(stmt).all()
         return [BannerMapper.to_domain(model) for model in banner_models]
+
+    if db is not None:
+        return _query(db)
+    with SessionLocal() as session:
+        return _query(session)
+
