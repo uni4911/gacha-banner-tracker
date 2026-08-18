@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from abc import ABC, abstractmethod
 from pathlib import Path
 from bs4 import BeautifulSoup, Tag
-from src.models.models import BannerType, Banner, Reward
+from src.db.models import BannerType, Banner, Reward
 from curl_cffi import requests
 from typing import Any
 

@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import Any
 from curl_cffi import requests
-from src.models.models import Banner, Reward, BannerType
+from src.db.models import Banner, Reward, BannerType
 
 logger = logging.getLogger(__name__)
 

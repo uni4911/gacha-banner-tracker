@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
-from src.models.models import BannerType
+from src.db.models import BannerType
 
 
 # ============================================================================
@@ -18,6 +18,7 @@ class RewardBase(BaseModel):
 
 class RewardCreate(RewardBase):
     pass
+
 
 class RewardUpdate(BaseModel):
     name: str | None = None
@@ -164,4 +165,3 @@ class SyncTriggerResponse(BaseModel):
     duration_seconds: float | None = None
     results: dict[str, int] | None = None
     error: str | None = None
-
