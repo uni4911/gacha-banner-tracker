@@ -4,7 +4,7 @@ from src.db.mapper import BannerMapper
 from src.models.models import Banner, Server
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import exists, select, or_
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from src.db.mapper import RewardMapper
 
 
@@ -126,11 +126,28 @@ def get_active_banners(
     db: Session | None = None,
 ) -> list[Banner]:
     def _query(session: Session) -> list[Banner]:
+        curr_utc = (
+            current_time.astimezone(timezone.utc)
+            if current_time.tzinfo is not None
+            else current_time.replace(tzinfo=timezone.utc)
+        )
+
+        # Buffer accounts for regional server time shifts (Asia, Europe, America)
+        buffer = timedelta(days=1) if server is not None else timedelta(seconds=0)
+        window_start = curr_utc - buffer
+        window_end = curr_utc + buffer
+
+        # SQL-level filter: database indexes filter out historical and future records directly
         stmt = (
             select(BannerModel)
             .join(GameModel)
             .where(
                 GameModel.name == game_name,
+                BannerModel.start_date <= window_end,
+                or_(
+                    BannerModel.end_date.is_(None),
+                    BannerModel.end_date >= window_start,
+                ),
             )
             .options(selectinload(BannerModel.rewards))
             .order_by(BannerModel.start_date.desc())
@@ -171,11 +188,23 @@ def get_upcoming_banners(
     db: Session | None = None,
 ) -> list[Banner]:
     def _query(session: Session) -> list[Banner]:
+        curr_utc = (
+            current_time.astimezone(timezone.utc)
+            if current_time.tzinfo is not None
+            else current_time.replace(tzinfo=timezone.utc)
+        )
+
+        # Buffer accounts for regional server time shifts
+        buffer = timedelta(days=1) if server is not None else timedelta(seconds=0)
+        min_start_date = curr_utc - buffer
+
+        # SQL-level filter: excludes banners that already ended in the past
         stmt = (
             select(BannerModel)
             .join(GameModel)
             .where(
                 GameModel.name == game_name,
+                BannerModel.start_date >= min_start_date,
             )
             .options(selectinload(BannerModel.rewards))
             .order_by(BannerModel.start_date.asc())
@@ -210,11 +239,6 @@ def get_upcoming_banners(
                     b.start_date
                     if b.start_date.tzinfo is not None
                     else b.start_date.replace(tzinfo=timezone.utc)
-                )
-                curr_utc = (
-                    current_time.astimezone(timezone.utc)
-                    if current_time.tzinfo is not None
-                    else current_time.replace(tzinfo=timezone.utc)
                 )
                 if start_utc > curr_utc:
                     upcoming.append(b)

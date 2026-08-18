@@ -35,7 +35,7 @@ async function fetchBannersFromEndpoint(
   }
 
   const queryString = params.toString() ? `?${params.toString()}` : '';
-  const path = `/games/${encodeURIComponent(gameName)}/banners/${endpoint}${queryString}`;
+  const path = `/api/v1/games/${encodeURIComponent(gameName)}/banners/${endpoint}${queryString}`;
 
   let response: Response | null = null;
   let lastStatus = 0;
@@ -134,7 +134,7 @@ export async function checkApiHealth(): Promise<boolean> {
 }
 
 export async function fetchGames(): Promise<{ id?: number | null; name: string }[]> {
-  const path = '/games';
+  const path = '/api/v1/games';
   // 1. Try relative proxy
   try {
     const res = await tryFetch(path);

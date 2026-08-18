@@ -259,3 +259,64 @@ def test_save_banners_duplicate_prevention(test_db):
     assert history[0].version == "4.4"
     assert history[0].phase == 2
 
+
+def test_sql_level_active_filtering_with_permanent_and_expired(test_db):
+    # 1. Expired banner (year 2021)
+    b_expired = Banner(
+        version="1.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Venti", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2021, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2021, 1, 21, 0, 0, 0, tzinfo=timezone.utc),
+        phase=1,
+    )
+    # 2. Currently active limited banner (year 2026)
+    b_active = Banner(
+        version="5.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Mualani", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 8, 1, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 8, 25, 0, 0, 0, tzinfo=timezone.utc),
+        phase=1,
+    )
+    # 3. Permanent standard banner (no end date)
+    b_permanent = Banner(
+        version="1.0",
+        banner_type=BannerType.STANDARD_CHARACTER,
+        limited_rewards=[Reward(name="Standard Pool", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2020, 9, 28, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=None,
+        phase=1,
+    )
+    # 4. Far future upcoming banner (year 2027)
+    b_future = Banner(
+        version="6.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Future Hero", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2027, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2027, 1, 21, 0, 0, 0, tzinfo=timezone.utc),
+        phase=1,
+    )
+
+    service.save_banners_to_db([b_expired, b_active, b_permanent, b_future], "Genshin Impact")
+
+    # Query active banners at Aug 15, 2026
+    current_time = datetime(2026, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
+    active = service.get_active_banners("Genshin Impact", current_time)
+
+    assert len(active) == 2
+    active_names = [b.limited_rewards[0].name for b in active]
+    assert "Mualani" in active_names
+    assert "Standard Pool" in active_names
+    assert "Venti" not in active_names
+    assert "Future Hero" not in active_names
+
+    # Query upcoming banners at Aug 15, 2026
+    upcoming = service.get_upcoming_banners("Genshin Impact", current_time)
+    assert len(upcoming) == 1
+    assert upcoming[0].limited_rewards[0].name == "Future Hero"
+

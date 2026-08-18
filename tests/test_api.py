@@ -69,7 +69,7 @@ def test_post_banners_endpoint(api_client):
         },
     ]
 
-    resp = api_client.post("/games/Genshin%20Impact/banners", json=payload)
+    resp = api_client.post("/api/v1/games/Genshin%20Impact/banners", json=payload)
     assert resp.status_code == 201
     assert resp.json()["count"] == 2
 
@@ -90,11 +90,11 @@ def test_get_active_banners_endpoint(api_client):
             ],
         }
     ]
-    api_client.post("/games/Genshin%20Impact/banners", json=payload)
+    api_client.post("/api/v1/games/Genshin%20Impact/banners", json=payload)
 
     # Active time
     resp = api_client.get(
-        "/games/Genshin%20Impact/banners/active",
+        "/api/v1/games/Genshin%20Impact/banners/active",
         params={"current_time": "2026-01-10T12:00:00Z"},
     )
     assert resp.status_code == 200
@@ -105,7 +105,7 @@ def test_get_active_banners_endpoint(api_client):
 
     # Expired time
     resp_exp = api_client.get(
-        "/games/Genshin%20Impact/banners/active",
+        "/api/v1/games/Genshin%20Impact/banners/active",
         params={"current_time": "2026-02-01T00:00:00Z"},
     )
     assert resp_exp.status_code == 200
@@ -126,10 +126,10 @@ def test_get_upcoming_banners_endpoint(api_client):
             "low_rate_rewards": [],
         }
     ]
-    api_client.post("/games/Genshin%20Impact/banners", json=payload)
+    api_client.post("/api/v1/games/Genshin%20Impact/banners", json=payload)
 
     resp = api_client.get(
-        "/games/Genshin%20Impact/banners/upcoming",
+        "/api/v1/games/Genshin%20Impact/banners/upcoming",
         params={"current_time": "2026-05-01T00:00:00Z"},
     )
     assert resp.status_code == 200
@@ -163,9 +163,9 @@ def test_get_character_history_endpoint(api_client):
             "low_rate_rewards": [],
         },
     ]
-    api_client.post("/games/Genshin%20Impact/banners", json=payload)
+    api_client.post("/api/v1/games/Genshin%20Impact/banners", json=payload)
 
-    resp = api_client.get("/games/Genshin%20Impact/banners/character/Raiden%20Shogun")
+    resp = api_client.get("/api/v1/games/Genshin%20Impact/banners/character/Raiden%20Shogun")
     assert resp.status_code == 200
     banners = resp.json()
     assert len(banners) == 2
@@ -187,37 +187,38 @@ def test_get_version_banners_endpoint(api_client):
             "low_rate_rewards": [],
         }
     ]
-    api_client.post("/games/Genshin%20Impact/banners", json=payload)
+    api_client.post("/api/v1/games/Genshin%20Impact/banners", json=payload)
 
-    resp = api_client.get("/games/Genshin%20Impact/banners/version/5.0")
+    resp = api_client.get("/api/v1/games/Genshin%20Impact/banners/version/5.0")
     assert resp.status_code == 200
     banners = resp.json()
     assert len(banners) == 1
     assert banners[0]["version"] == "5.0"
 
 
-def test_v1_prefixed_endpoints(api_client):
-    # Test /api/v1/games/{game_name}/banners routes
-    resp_banners = api_client.post(
-        "/api/v1/games/Star%20Rail/banners",
-        json=[
-            {
-                "version": "2.0",
-                "phase": 1,
-                "banner_type": "LIMITED_CHARACTER",
-                "start_date": "2026-02-01T10:00:00Z",
-                "end_date": "2026-02-21T18:00:00Z",
-                "limited_rewards": [
-                    {"name": "Black Swan", "rarity": 5, "is_featured": True}
-                ],
-            }
-        ],
-    )
-    assert resp_banners.status_code == 201
+def test_get_all_games_endpoint(api_client):
+    payload = [
+        {
+            "version": "1.0",
+            "phase": 1,
+            "banner_type": "LIMITED_CHARACTER",
+            "start_date": "2026-01-01T10:00:00Z",
+            "end_date": "2026-01-21T18:00:00Z",
+            "limited_rewards": [
+                {"name": "Rover", "rarity": 5, "is_featured": True, "extra_data": {}}
+            ],
+            "low_rate_rewards": [],
+        }
+    ]
+    api_client.post("/api/v1/games/Wuthering%20Waves/banners", json=payload)
 
-    resp_active = api_client.get(
-        "/api/v1/games/Star%20Rail/banners/active",
-        params={"current_time": "2026-02-10T12:00:00Z"},
-    )
-    assert resp_active.status_code == 200
-    assert len(resp_active.json()) == 1
+    resp = api_client.get("/api/v1/games")
+    assert resp.status_code == 200
+    games = resp.json()
+    assert any(g["name"] == "Wuthering Waves" for g in games)
+
+
+def test_no_unprefixed_duplicate_routes(api_client):
+    # Verify that un-prefixed /games routes are no longer exposed on root
+    resp = api_client.get("/games")
+    assert resp.status_code == 404

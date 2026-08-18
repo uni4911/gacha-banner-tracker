@@ -19,9 +19,11 @@ engine = create_engine(DATABASE_URL, echo=echo_sql, connect_args={"check_same_th
 
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
-    """Enable foreign key constraints for SQLite connections."""
+    """Enable foreign key constraints, WAL mode, and busy timeout for SQLite connections."""
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
 
 

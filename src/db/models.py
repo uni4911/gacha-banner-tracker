@@ -24,6 +24,7 @@ class BannerModel(Base):
     __tablename__ = "banners"
     __table_args__ = (
         Index("ix_banners_game_start_date", "game_id", "start_date"),
+        Index("ix_banners_game_end_date", "game_id", "end_date"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
