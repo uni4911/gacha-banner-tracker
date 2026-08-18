@@ -182,3 +182,25 @@ export function formatBannerType(type: string, gameName?: string): string {
   }
 }
 
+export interface SyncStatus {
+  is_running: boolean;
+  status: 'idle' | 'running' | 'success' | 'error' | string;
+  last_synced_at: string | null;
+  next_run_time: string | null;
+  last_duration_seconds: number | null;
+  last_error: string | null;
+  last_results: Record<string, number> | null;
+  scheduler_active: boolean;
+}
+
+export interface SyncTriggerResult {
+  status: string;
+  message: string;
+  is_running: boolean;
+  last_synced_at?: string | null;
+  duration_seconds?: number | null;
+  results?: Record<string, number> | null;
+  error?: string | null;
+}
+
+

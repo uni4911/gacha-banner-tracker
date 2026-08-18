@@ -158,3 +158,81 @@ export async function fetchGames(): Promise<{ id?: number | null; name: string }
   return [];
 }
 
+export async function fetchSyncStatus(): Promise<import('../types/banner').SyncStatus | null> {
+  const path = '/api/v1/sync/status';
+  try {
+    const res = await tryFetch(path, 3000);
+    if (res.ok) {
+      return (await res.json()) as import('../types/banner').SyncStatus;
+    }
+  } catch {
+    // fallback
+  }
+
+  try {
+    const directRes = await tryFetch(`${FALLBACK_DIRECT_URL}${path}`, 3000);
+    if (directRes.ok) {
+      return (await directRes.json()) as import('../types/banner').SyncStatus;
+    }
+  } catch {
+    // offline
+  }
+
+  return null;
+}
+
+export async function triggerManualSync(
+  gameNames?: string[],
+  downloadImages?: boolean
+): Promise<import('../types/banner').SyncTriggerResult> {
+  const path = '/api/v1/sync/trigger';
+  const body = JSON.stringify({
+    game_names: gameNames || null,
+    download_images: downloadImages !== undefined ? downloadImages : null,
+  });
+
+  const sendPost = async (url: string) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 5000);
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(id);
+    }
+  };
+
+  try {
+    const res = await sendPost(path);
+    if (res.ok) {
+      return (await res.json()) as import('../types/banner').SyncTriggerResult;
+    }
+    if (res.status === 409) {
+      throw new Error('A banner sync job is already in progress.');
+    }
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('already in progress')) {
+      throw err;
+    }
+    // try fallback
+  }
+
+  const directRes = await sendPost(`${FALLBACK_DIRECT_URL}${path}`);
+  if (directRes.ok) {
+    return (await directRes.json()) as import('../types/banner').SyncTriggerResult;
+  }
+  if (directRes.status === 409) {
+    throw new Error('A banner sync job is already in progress.');
+  }
+
+  throw new Error(`Failed to trigger sync: ${directRes.statusText}`);
+}
+
+

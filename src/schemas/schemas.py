@@ -128,3 +128,40 @@ class GameDetailResponse(GameResponse):
 
 # Convenient alias
 GameWithBannersResponse = GameDetailResponse
+
+
+# ============================================================================
+# Sync Schemas
+# ============================================================================
+
+class SyncTriggerRequest(BaseModel):
+    game_names: list[str] | None = Field(
+        default=None,
+        description="Optional list of game names to scrape. If omitted, scrapes all configured games.",
+    )
+    download_images: bool | None = Field(
+        default=None,
+        description="Optional override for whether to download artwork/icons locally.",
+    )
+
+
+class SyncStatusResponse(BaseModel):
+    is_running: bool
+    status: str
+    last_synced_at: datetime | None = None
+    next_run_time: datetime | None = None
+    last_duration_seconds: float | None = None
+    last_error: str | None = None
+    last_results: dict[str, int] | None = None
+    scheduler_active: bool = False
+
+
+class SyncTriggerResponse(BaseModel):
+    status: str
+    message: str
+    is_running: bool
+    last_synced_at: str | None = None
+    duration_seconds: float | None = None
+    results: dict[str, int] | None = None
+    error: str | None = None
+
