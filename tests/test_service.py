@@ -393,3 +393,105 @@ def test_get_banners_unified_service_filters_and_pagination(test_db):
     assert len(p2) == 1
 
 
+def test_item_deduplication_and_relationship(test_db):
+    """
+    Test that running multiple banners featuring the same character (reruns)
+    links to a SINGLE Item row, avoiding duplication.
+    """
+    b1 = Banner(
+        version="1.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(
+            name="Seele",
+            rarity=5,
+            is_featured=True,
+            extra_data={"element": "Quantum", "path": "The Hunt", "local_wish": "/static/seele.png"},
+        )],
+        low_rate_rewards=[Reward(name="Natasha", rarity=4, is_featured=False)],
+        start_date=datetime(2023, 4, 26, tzinfo=timezone.utc),
+        end_date=datetime(2023, 5, 17, tzinfo=timezone.utc),
+        phase=1,
+    )
+    b2 = Banner(
+        version="1.4",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(
+            name="Seele",
+            rarity=5,
+            is_featured=True,
+            extra_data={"element": "Quantum", "path": "The Hunt", "local_wish": "/static/seele_v2.png"},
+        )],
+        low_rate_rewards=[Reward(name="Guinaifen", rarity=4, is_featured=False)],
+        start_date=datetime(2023, 10, 27, tzinfo=timezone.utc),
+        end_date=datetime(2023, 11, 14, tzinfo=timezone.utc),
+        phase=2,
+    )
+
+    service.save_banners_to_db([b1, b2], "Honkai: Star Rail")
+
+    # Verify only 1 Item row for Seele exists
+    items = service.get_game_items("Honkai: Star Rail")
+    seele_items = [i for i in items if i.name == "Seele"]
+    assert len(seele_items) == 1
+
+    seele = seele_items[0]
+    assert seele.slug == "seele"
+    assert seele.rarity == 5
+    assert seele.item_type == "CHARACTER"
+    assert seele.extra_data.get("element") == "Quantum"
+    assert seele.extra_data.get("path") == "The Hunt"
+
+    # Verify Seele is linked to both banners via rewards
+    history = service.get_character_banner_history("Honkai: Star Rail", "Seele")
+    assert len(history) == 2
+    assert history[0].version == "1.4"
+    assert history[1].version == "1.0"
+    assert history[0].rewards[0].item_id == seele.id
+    assert history[1].rewards[0].item_id == seele.id
+
+
+def test_game_agnostic_extra_data_and_filtering(test_db):
+    """
+    Test that Item extra_data supports diverse non-standard gacha games
+    (e.g., Uma Musume support cards, FGO craft essences, ZZZ bangboos).
+    """
+    with test_db() as session:
+        game = service.get_or_create_game(session, "Uma Musume")
+        session.commit()
+
+        # Add a Trainee Character
+        service.get_or_create_item(
+            session=session,
+            game_id=game.id,
+            name="Special Week",
+            rarity=3,
+            item_type="CHARACTER",
+            extra_data={"surface": "Turf", "distance": "Medium", "strategy": "Pace"},
+        )
+
+        # Add a Support Card (not a weapon!)
+        service.get_or_create_item(
+            session=session,
+            game_id=game.id,
+            name="Fine Motion (Support)",
+            rarity=3,
+            item_type="SUPPORT_CARD",
+            extra_data={"card_type": "Wit", "training_effect": "15%"},
+        )
+        session.commit()
+
+    all_items = service.get_game_items("Uma Musume")
+    assert len(all_items) == 2
+
+    trainees = service.get_game_items("Uma Musume", item_type="CHARACTER")
+    assert len(trainees) == 1
+    assert trainees[0].name == "Special Week"
+    assert trainees[0].extra_data["surface"] == "Turf"
+
+    cards = service.get_game_items("Uma Musume", item_type="SUPPORT_CARD")
+    assert len(cards) == 1
+    assert cards[0].name == "Fine Motion (Support)"
+    assert cards[0].extra_data["card_type"] == "Wit"
+
+
+

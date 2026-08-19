@@ -1,3 +1,17 @@
+export interface Item {
+  id?: number | null;
+  game_id?: number | null;
+  name: string;
+  slug?: string;
+  item_type?: string;
+  rarity: number;
+  icon_url?: string | null;
+  wish_url?: string | null;
+  local_icon?: string | null;
+  local_wish?: string | null;
+  extra_data?: Record<string, unknown>;
+}
+
 export interface RewardExtraData {
   icon_url?: string;
   wish_url?: string;
@@ -9,6 +23,8 @@ export interface RewardExtraData {
 export interface Reward {
   id?: number | null;
   banner_id?: number | null;
+  item_id?: number | null;
+  item?: Item | null;
   name: string;
   rarity: number;
   is_featured: boolean;

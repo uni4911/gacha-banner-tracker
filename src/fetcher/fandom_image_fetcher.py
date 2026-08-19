@@ -391,19 +391,31 @@ class FandomImageFetcher:
         wiki = self._get_wiki_subdomain(game_name)
         is_weapon_banner = banner_type in (BannerType.LIMITED_WEAPON, BannerType.STANDARD_WEAPON)
 
-        # Collect candidate filenames for all rewards
+        # Filter rewards that still need icon or wish art resolution
+        rewards_to_query: list[Reward] = []
+        for reward in rewards:
+            if reward.extra_data is None:
+                reward.extra_data = {}
+            has_icon = bool(reward.extra_data.get("icon_url") or reward.extra_data.get("local_icon"))
+            has_wish = bool(reward.extra_data.get("wish_url") or reward.extra_data.get("local_wish"))
+            if not (has_icon and has_wish):
+                rewards_to_query.append(reward)
+
+        # Collect candidate filenames for rewards needing lookups
         reward_candidates: list[tuple[Reward, dict[str, list[str]]]] = []
         all_candidate_filenames: set[str] = set()
 
-        for reward in rewards:
+        for reward in rewards_to_query:
             is_char = not is_weapon_banner
             candidates = self._generate_candidate_titles(game_name, reward.name, is_character=is_char)
             reward_candidates.append((reward, candidates))
-            all_candidate_filenames.update(candidates["icon"])
-            all_candidate_filenames.update(candidates["wish"])
+            if not (reward.extra_data.get("icon_url") or reward.extra_data.get("local_icon")):
+                all_candidate_filenames.update(candidates["icon"])
+            if not (reward.extra_data.get("wish_url") or reward.extra_data.get("local_wish")):
+                all_candidate_filenames.update(candidates["wish"])
 
         # Fetch all candidate URLs in batch
-        found_urls = self.query_fandom_batch(wiki, list(all_candidate_filenames))
+        found_urls = self.query_fandom_batch(wiki, list(all_candidate_filenames)) if all_candidate_filenames else {}
 
         # Assign best matches to reward.extra_data and queue downloads
         game_folder_slug = wiki.replace("-", "_")

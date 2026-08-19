@@ -183,3 +183,39 @@ def test_paginated_banner_response():
     assert len(paginated.items) == 1
     assert paginated.items[0].version == "5.0"
 
+
+def test_item_schemas():
+    from src.schemas.schemas import ItemBase, ItemCreate, ItemUpdate, ItemResponse
+    from src.db.models import ItemModel
+
+    # ItemCreate
+    item_create = ItemCreate(
+        name="Acheron",
+        item_type="CHARACTER",
+        rarity=5,
+        extra_data={"element": "Lightning", "path": "Nihility"},
+    )
+    assert item_create.name == "Acheron"
+    assert item_create.rarity == 5
+    assert item_create.extra_data["element"] == "Lightning"
+
+    # ItemResponse from ORM
+    item_model = ItemModel(
+        id=7,
+        game_id=2,
+        name="Acheron",
+        item_type="CHARACTER",
+        rarity=5,
+        icon_url="https://wiki.fandom.com/acheron_icon.png",
+        wish_url="https://wiki.fandom.com/acheron_wish.png",
+        local_icon="/static/images/honkai_star_rail/acheron_icon.png",
+        local_wish="/static/images/honkai_star_rail/acheron_wish.png",
+        extra_data={"path": "Nihility"},
+    )
+    item_resp = ItemResponse.model_validate(item_model)
+    assert item_resp.id == 7
+    assert item_resp.slug == "acheron"
+    assert item_resp.local_icon == "/static/images/honkai_star_rail/acheron_icon.png"
+    assert item_resp.extra_data["path"] == "Nihility"
+
+

@@ -235,4 +235,37 @@ export async function triggerManualSync(
   throw new Error(`Failed to trigger sync: ${directRes.statusText}`);
 }
 
+export async function fetchGameItems(
+  gameIdentifier: string,
+  itemType?: string,
+  rarity?: number
+): Promise<import('../types/banner').Item[]> {
+  const params = new URLSearchParams();
+  if (itemType) params.append('item_type', itemType);
+  if (rarity !== undefined) params.append('rarity', String(rarity));
+
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const path = `/api/v1/games/${encodeURIComponent(gameIdentifier)}/items${query}`;
+
+  try {
+    const res = await tryFetch(path);
+    if (res.ok) {
+      return (await res.json()) as import('../types/banner').Item[];
+    }
+  } catch {
+    // fallback
+  }
+
+  try {
+    const directRes = await tryFetch(`${FALLBACK_DIRECT_URL}${path}`);
+    if (directRes.ok) {
+      return (await directRes.json()) as import('../types/banner').Item[];
+    }
+  } catch {
+    // offline
+  }
+
+  return [];
+}
+
 

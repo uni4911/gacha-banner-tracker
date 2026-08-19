@@ -6,6 +6,45 @@ from src.db.models import BannerType
 
 
 # ============================================================================
+# Item Schemas
+# ============================================================================
+
+class ItemBase(BaseModel):
+    name: str
+    slug: str | None = None
+    item_type: str = "CHARACTER"
+    rarity: int = 5
+    icon_url: str | None = None
+    wish_url: str | None = None
+    local_icon: str | None = None
+    local_wish: str | None = None
+    extra_data: dict[str, Any] = Field(default_factory=dict)
+
+
+class ItemCreate(ItemBase):
+    game_id: int | None = None
+
+
+class ItemUpdate(BaseModel):
+    name: str | None = None
+    slug: str | None = None
+    item_type: str | None = None
+    rarity: int | None = None
+    icon_url: str | None = None
+    wish_url: str | None = None
+    local_icon: str | None = None
+    local_wish: str | None = None
+    extra_data: dict[str, Any] | None = None
+
+
+class ItemResponse(ItemBase):
+    id: int | None = None
+    game_id: int | None = None
+    slug: str = ""
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
 # Reward Schemas
 # ============================================================================
 
@@ -17,7 +56,7 @@ class RewardBase(BaseModel):
 
 
 class RewardCreate(RewardBase):
-    pass
+    item_id: int | None = None
 
 
 class RewardUpdate(BaseModel):
@@ -25,11 +64,14 @@ class RewardUpdate(BaseModel):
     rarity: int | None = None
     is_featured: bool | None = None
     extra_data: dict[str, Any] | None = None
+    item_id: int | None = None
 
 
 class RewardResponse(RewardBase):
     id: int | None = None
     banner_id: int | None = None
+    item_id: int | None = None
+    item: ItemResponse | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

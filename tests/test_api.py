@@ -336,3 +336,73 @@ def test_get_single_game_detail_endpoint(api_client):
     assert resp_404.status_code == 404
     assert "not found" in resp_404.json()["detail"].lower()
 
+
+def test_get_game_items_characters_weapons_endpoints(api_client):
+    # Seed a game with character and weapon banners
+    payload = [
+        {
+            "version": "1.0",
+            "phase": 1,
+            "banner_type": "LIMITED_CHARACTER",
+            "start_date": "2026-01-01T10:00:00Z",
+            "end_date": "2026-01-21T18:00:00Z",
+            "limited_rewards": [
+                {"name": "Ellen Joe", "rarity": 5, "is_featured": True, "extra_data": {"attribute": "Ice"}}
+            ],
+            "low_rate_rewards": [
+                {"name": "Soukaku", "rarity": 4, "is_featured": False, "extra_data": {"attribute": "Ice"}}
+            ],
+        },
+        {
+            "version": "1.0",
+            "phase": 1,
+            "banner_type": "LIMITED_WEAPON",
+            "start_date": "2026-01-01T10:00:00Z",
+            "end_date": "2026-01-21T18:00:00Z",
+            "limited_rewards": [
+                {"name": "Deep Sea Visitor", "rarity": 5, "is_featured": True, "extra_data": {"weapon_type": "W-Engine"}}
+            ],
+            "low_rate_rewards": [],
+        },
+    ]
+    api_client.post("/api/v1/games/zenless-zone-zero/banners", json=payload)
+
+    # 1. Query all items
+    resp_items = api_client.get("/api/v1/games/zenless-zone-zero/items")
+    assert resp_items.status_code == 200
+    items = resp_items.json()
+    assert len(items) == 3
+    item_names = [i["name"] for i in items]
+    assert "Ellen Joe" in item_names
+    assert "Soukaku" in item_names
+    assert "Deep Sea Visitor" in item_names
+
+    # 2. Query characters only
+    resp_chars = api_client.get("/api/v1/games/zenless-zone-zero/characters")
+    assert resp_chars.status_code == 200
+    chars = resp_chars.json()
+    assert len(chars) == 2
+    char_names = [c["name"] for c in chars]
+    assert "Ellen Joe" in char_names
+    assert "Soukaku" in char_names
+    assert "Deep Sea Visitor" not in char_names
+
+    # 3. Query weapons only
+    resp_weaps = api_client.get("/api/v1/games/zenless-zone-zero/weapons")
+    assert resp_weaps.status_code == 200
+    weaps = resp_weaps.json()
+    assert len(weaps) == 1
+    assert weaps[0]["name"] == "Deep Sea Visitor"
+    assert weaps[0]["item_type"] == "WEAPON"
+
+    # 4. Query with rarity filter
+    resp_5star = api_client.get("/api/v1/games/zenless-zone-zero/items?rarity=5")
+    assert resp_5star.status_code == 200
+    fives = resp_5star.json()
+    assert len(fives) == 2
+    five_names = [f["name"] for f in fives]
+    assert "Ellen Joe" in five_names
+    assert "Deep Sea Visitor" in five_names
+    assert "Soukaku" not in five_names
+
+

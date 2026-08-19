@@ -4,7 +4,7 @@ from typing import Any
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, or_
 
-from src.db.models import Game, Reward, Banner, Server, BannerType, slugify
+from src.db.models import Game, Reward, Banner, Item, Server, BannerType, slugify
 from src.db.database import SessionLocal
 
 
@@ -56,6 +56,100 @@ def get_all_games(db: Session | None = None) -> list[Game]:
         return list(session.scalars(stmt).all())
 
 
+def get_or_create_item(
+    session: Session,
+    game_id: int,
+    name: str,
+    rarity: int = 5,
+    item_type: str = "CHARACTER",
+    extra_data: dict[str, Any] | None = None,
+    icon_url: str | None = None,
+    wish_url: str | None = None,
+    local_icon: str | None = None,
+    local_wish: str | None = None,
+) -> Item:
+    """
+    Retrieve an existing Item for a game by exact name or slug, or create a new one.
+    Also merges any newly resolved image URLs or extra_data attributes.
+    """
+    clean_name = name.strip()
+    clean_slug = slugify(clean_name)
+
+    stmt = select(Item).where(
+        Item.game_id == game_id,
+        or_(
+            Item.name == clean_name,
+            Item.name.ilike(clean_name),
+            Item.slug == clean_slug,
+        ),
+    )
+    item = session.scalar(stmt)
+
+    if item is None:
+        item = Item(
+            name=clean_name,
+            game_id=game_id,
+            slug=clean_slug,
+            item_type=item_type,
+            rarity=rarity,
+            icon_url=icon_url,
+            wish_url=wish_url,
+            local_icon=local_icon,
+            local_wish=local_wish,
+            extra_data=extra_data or {},
+        )
+        session.add(item)
+        session.flush()
+    else:
+        # Merge newly discovered images or extra_data if missing
+        if icon_url and not item.icon_url:
+            item.icon_url = icon_url
+        if wish_url and not item.wish_url:
+            item.wish_url = wish_url
+        if local_icon and not item.local_icon:
+            item.local_icon = local_icon
+        if local_wish and not item.local_wish:
+            item.local_wish = local_wish
+        if extra_data:
+            merged = dict(item.extra_data or {})
+            merged.update(extra_data)
+            item.extra_data = merged
+        if item_type and item_type != "CHARACTER" and item.item_type == "CHARACTER":
+            item.item_type = item_type
+        if rarity and rarity != item.rarity:
+            item.rarity = rarity
+        session.flush()
+
+    return item
+
+
+def get_game_items(
+    game_identifier: str,
+    item_type: str | None = None,
+    rarity: int | None = None,
+    db: Session | None = None,
+) -> list[Item]:
+    """Retrieve all unique items (characters, weapons, cards, etc.) registered for a game."""
+    def _query(session: Session) -> list[Item]:
+        stmt = (
+            select(Item)
+            .join(Item.game)
+            .where(_game_filter(game_identifier))
+        )
+        if item_type is not None:
+            stmt = stmt.where(Item.item_type.ilike(item_type.strip()))
+        if rarity is not None:
+            stmt = stmt.where(Item.rarity == rarity)
+
+        stmt = stmt.order_by(Item.rarity.desc(), Item.name.asc())
+        return list(session.scalars(stmt).all())
+
+    if db is not None:
+        return _query(db)
+    with SessionLocal() as session:
+        return _query(session)
+
+
 def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None = None) -> None:
     def _save(session: Session) -> None:
         game = get_or_create_game(session, game_name)
@@ -74,7 +168,7 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                     Reward.name == featured_name,
                     Reward.is_featured.is_(True),
                 )
-                .options(selectinload(Banner.rewards))
+                .options(selectinload(Banner.rewards).selectinload(Reward.item))
             )
             existing_candidates = session.scalars(stmt).all()
 
@@ -109,6 +203,35 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                     matched_banner = eb
                     break
 
+            def _resolve_item_for_reward(reward_obj: Reward) -> Item:
+                is_weapon_banner = banner_data.banner_type in (
+                    BannerType.LIMITED_WEAPON,
+                    BannerType.STANDARD_WEAPON,
+                    "LIMITED_WEAPON",
+                    "STANDARD_WEAPON",
+                )
+                inferred_type = "WEAPON" if is_weapon_banner else "CHARACTER"
+                if reward_obj.extra_data and "item_type" in reward_obj.extra_data:
+                    inferred_type = str(reward_obj.extra_data["item_type"])
+
+                icon_url = reward_obj.extra_data.get("icon_url") if reward_obj.extra_data else None
+                wish_url = reward_obj.extra_data.get("wish_url") if reward_obj.extra_data else None
+                local_icon = reward_obj.extra_data.get("local_icon") if reward_obj.extra_data else None
+                local_wish = reward_obj.extra_data.get("local_wish") if reward_obj.extra_data else None
+
+                return get_or_create_item(
+                    session=session,
+                    game_id=game.id,
+                    name=reward_obj.name,
+                    rarity=reward_obj.rarity,
+                    item_type=inferred_type,
+                    extra_data=reward_obj.extra_data,
+                    icon_url=icon_url,
+                    wish_url=wish_url,
+                    local_icon=local_icon,
+                    local_wish=local_wish,
+                )
+
             if matched_banner is not None:
                 # Upgrade existing banner metadata with latest parsed values
                 if banner_data.version not in ("0.0", "Upcoming"):
@@ -120,9 +243,10 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                 if banner_data.end_date is not None:
                     matched_banner.end_date = banner_data.end_date
 
-                # Update or add reward extra_data
+                # Update or add reward extra_data and ensure items are linked
                 existing_rewards_by_name = {r.name: r for r in matched_banner.rewards}
                 for new_reward in banner_data.rewards:
+                    item = _resolve_item_for_reward(new_reward)
                     if new_reward.name in existing_rewards_by_name:
                         r_model = existing_rewards_by_name[new_reward.name]
                         updated_data = dict(r_model.extra_data or {})
@@ -131,6 +255,8 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                         r_model.extra_data = updated_data
                         r_model.rarity = new_reward.rarity
                         r_model.is_featured = new_reward.is_featured
+                        r_model.item_id = item.id
+                        r_model.item = item
                     else:
                         new_r = Reward(
                             name=new_reward.name,
@@ -138,11 +264,21 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                             is_featured=new_reward.is_featured,
                             extra_data=new_reward.extra_data,
                             banner_id=matched_banner.id,
+                            item_id=item.id,
+                            item=item,
                         )
                         matched_banner.rewards.append(new_r)
             else:
+                # Add banner to session first so all attached rewards are part of session
                 banner_data.game_id = game.id
                 session.add(banner_data)
+                session.flush()
+
+                # Resolve all items for the new banner and assign item_id
+                for r in banner_data.rewards:
+                    item = _resolve_item_for_reward(r)
+                    r.item_id = item.id
+
                 session.flush()
 
         session.commit()
@@ -184,7 +320,7 @@ def get_active_banners(
                     Banner.end_date >= window_start,
                 ),
             )
-            .options(selectinload(Banner.rewards))
+            .options(selectinload(Banner.rewards).selectinload(Reward.item))
             .order_by(Banner.start_date.desc())
             .distinct()
         )
@@ -239,7 +375,7 @@ def get_upcoming_banners(
                 _game_filter(game_name),
                 Banner.start_date >= min_start_date,
             )
-            .options(selectinload(Banner.rewards))
+            .options(selectinload(Banner.rewards).selectinload(Reward.item))
             .order_by(Banner.start_date.asc())
             .distinct()
         )
@@ -287,15 +423,23 @@ def get_character_banner_history(
     db: Session | None = None,
 ) -> list[Banner]:
     def _query(session: Session) -> list[Banner]:
+        clean_name = character_name.strip()
         stmt = (
             select(Banner)
             .join(Banner.game)
             .join(Banner.rewards)
+            .outerjoin(Reward.item)
             .where(
                 _game_filter(game_name),
-                Reward.name == character_name,
+                or_(
+                    Reward.name == clean_name,
+                    Reward.name.ilike(clean_name),
+                    Item.name == clean_name,
+                    Item.name.ilike(clean_name),
+                    Item.slug == slugify(clean_name),
+                ),
             )
-            .options(selectinload(Banner.rewards))
+            .options(selectinload(Banner.rewards).selectinload(Reward.item))
             .order_by(Banner.start_date.desc())
             .distinct()
         )
@@ -320,7 +464,7 @@ def get_banners_by_version(
                 _game_filter(game_name),
                 Banner.version == version,
             )
-            .options(selectinload(Banner.rewards))
+            .options(selectinload(Banner.rewards).selectinload(Reward.item))
         )
         return list(session.scalars(stmt).all())
 
@@ -359,7 +503,7 @@ def get_banners(
             select(Banner)
             .join(Banner.game)
             .where(_game_filter(game_identifier))
-            .options(selectinload(Banner.rewards))
+            .options(selectinload(Banner.rewards).selectinload(Reward.item))
         )
 
         if version is not None:
@@ -373,7 +517,14 @@ def get_banners(
             stmt = stmt.where(Banner.banner_type == bt_str)
 
         if character_name is not None:
-            stmt = stmt.join(Banner.rewards).where(Reward.name.ilike(f"%{character_name.strip()}%"))
+            clean_char = character_name.strip()
+            stmt = stmt.join(Banner.rewards).outerjoin(Reward.item).where(
+                or_(
+                    Reward.name.ilike(f"%{clean_char}%"),
+                    Item.name.ilike(f"%{clean_char}%"),
+                    Item.slug.ilike(f"%{slugify(clean_char)}%"),
+                )
+            )
 
         stmt = stmt.order_by(Banner.start_date.desc()).distinct()
         raw_banners = list(session.scalars(stmt).all())

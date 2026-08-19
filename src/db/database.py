@@ -40,6 +40,13 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE games ADD COLUMN slug VARCHAR(100)"))
             conn.commit()
 
+        # Safe auto-migration for rewards.item_id
+        cursor_rewards = conn.execute(text("PRAGMA table_info(rewards)"))
+        reward_columns = [row[1] for row in cursor_rewards.fetchall()]
+        if "item_id" not in reward_columns and "name" in reward_columns:
+            conn.execute(text("ALTER TABLE rewards ADD COLUMN item_id INTEGER REFERENCES items(id)"))
+            conn.commit()
+
         # Populate missing slugs for existing game rows
         games = conn.execute(text("SELECT id, name, slug FROM games")).fetchall()
         for g_id, g_name, g_slug in games:

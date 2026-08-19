@@ -86,12 +86,16 @@ class Game(Base):
     banners: Mapped[list[Banner]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
     )
+    items: Mapped[list[Item]] = relationship(
+        back_populates="game", cascade="all, delete-orphan"
+    )
 
     def __init__(
         self,
         name: str = "",
         slug: str | None = None,
         banners: list[Banner] | None = None,
+        items: list[Item] | None = None,
         id: int | None = None,
         **kwargs: Any,
     ):
@@ -99,6 +103,70 @@ class Game(Base):
         init_kwargs: dict[str, Any] = {"name": name, "slug": computed_slug, **kwargs}
         if banners is not None:
             init_kwargs["banners"] = banners
+        if items is not None:
+            init_kwargs["items"] = items
+        if id is not None:
+            init_kwargs["id"] = id
+        super().__init__(**init_kwargs)
+
+
+class Item(Base):
+    """
+    Game-agnostic entity representing any gacha item (Character, Weapon, Support Card, Bangboo, etc.)
+    Game-specific attributes (element, path, aptitude, specialty, weapon type, etc.) are stored in extra_data.
+    """
+    __tablename__ = "items"
+    __table_args__ = (
+        Index("ix_items_game_name", "game_id", "name"),
+        Index("ix_items_game_slug", "game_id", "slug"),
+        Index("ix_items_game_type", "game_id", "item_type"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100), index=True)
+    slug: Mapped[str] = mapped_column(String(100), index=True)
+    item_type: Mapped[str] = mapped_column(String(50), default="CHARACTER", index=True)
+    rarity: Mapped[int] = mapped_column(default=5)
+    icon_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    wish_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    local_icon: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    local_wish: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    extra_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    game: Mapped[Game] = relationship(back_populates="items")
+    rewards: Mapped[list[Reward]] = relationship(back_populates="item")
+
+    def __init__(
+        self,
+        name: str = "",
+        game_id: int | None = None,
+        slug: str | None = None,
+        item_type: str = "CHARACTER",
+        rarity: int = 5,
+        icon_url: str | None = None,
+        wish_url: str | None = None,
+        local_icon: str | None = None,
+        local_wish: str | None = None,
+        extra_data: dict[str, Any] | None = None,
+        id: int | None = None,
+        **kwargs: Any,
+    ):
+        computed_slug = slug or slugify(name) if name else ""
+        init_kwargs: dict[str, Any] = {
+            "name": name,
+            "slug": computed_slug,
+            "item_type": item_type,
+            "rarity": rarity,
+            "icon_url": icon_url,
+            "wish_url": wish_url,
+            "local_icon": local_icon,
+            "local_wish": local_wish,
+            "extra_data": dict(extra_data) if extra_data is not None else {},
+            **kwargs,
+        }
+        if game_id is not None:
+            init_kwargs["game_id"] = game_id
         if id is not None:
             init_kwargs["id"] = id
         super().__init__(**init_kwargs)
@@ -250,12 +318,14 @@ class Reward(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     banner_id: Mapped[int | None] = mapped_column(ForeignKey("banners.id"), index=True, nullable=True)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id"), index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(100), index=True)
     rarity: Mapped[int] = mapped_column()
     is_featured: Mapped[bool] = mapped_column()
     extra_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     banner: Mapped[Banner | None] = relationship(back_populates="rewards")
+    item: Mapped[Item | None] = relationship(back_populates="rewards")
 
     def __init__(
         self,
@@ -264,6 +334,8 @@ class Reward(Base):
         is_featured: bool = False,
         extra_data: dict[str, Any] | None = None,
         banner_id: int | None = None,
+        item_id: int | None = None,
+        item: Item | None = None,
         id: int | None = None,
         **kwargs: Any,
     ):
@@ -276,12 +348,21 @@ class Reward(Base):
         }
         if banner_id is not None:
             init_kwargs["banner_id"] = banner_id
+        if item_id is not None:
+            init_kwargs["item_id"] = item_id
+        if item is not None:
+            init_kwargs["item"] = item
+            if not name and item.name:
+                init_kwargs["name"] = item.name
+            if item.rarity:
+                init_kwargs["rarity"] = item.rarity
         if id is not None:
             init_kwargs["id"] = id
         super().__init__(**init_kwargs)
 
 
 # Backward compatibility aliases
+ItemModel = Item
 GameModel = Game
 BannerModel = Banner
 RewardModel = Reward
