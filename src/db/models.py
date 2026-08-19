@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from datetime import datetime, timezone, timedelta, tzinfo
 from enum import Enum
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -64,6 +65,13 @@ def get_server_timezone(server: Server) -> tzinfo:
         return SERVER_FIXED_OFFSETS.get(server, timezone.utc)
 
 
+def slugify(text: str) -> str:
+    """Convert a name to a clean URL-friendly slug (e.g. 'Honkai: Star Rail' -> 'honkai-star-rail')."""
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    return re.sub(r"[\s_-]+", "-", text).strip("-")
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -73,6 +81,7 @@ class Game(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True, default="")
 
     banners: Mapped[list[Banner]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
@@ -81,11 +90,13 @@ class Game(Base):
     def __init__(
         self,
         name: str = "",
+        slug: str | None = None,
         banners: list[Banner] | None = None,
         id: int | None = None,
         **kwargs: Any,
     ):
-        init_kwargs: dict[str, Any] = {"name": name, **kwargs}
+        computed_slug = slug or slugify(name) if name else ""
+        init_kwargs: dict[str, Any] = {"name": name, "slug": computed_slug, **kwargs}
         if banners is not None:
             init_kwargs["banners"] = banners
         if id is not None:

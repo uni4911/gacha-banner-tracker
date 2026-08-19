@@ -1,9 +1,9 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
 import os
-from src.db.models import Base
+from src.db.models import Base, slugify
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -32,6 +32,25 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
+    # Safe auto-migration for existing SQLite database files
+    with engine.connect() as conn:
+        cursor = conn.execute(text("PRAGMA table_info(games)"))
+        columns = [row[1] for row in cursor.fetchall()]
+        if "slug" not in columns and "name" in columns:
+            conn.execute(text("ALTER TABLE games ADD COLUMN slug VARCHAR(100)"))
+            conn.commit()
+
+        # Populate missing slugs for existing game rows
+        games = conn.execute(text("SELECT id, name, slug FROM games")).fetchall()
+        for g_id, g_name, g_slug in games:
+            if not g_slug and g_name:
+                computed = slugify(g_name)
+                conn.execute(
+                    text("UPDATE games SET slug = :slug WHERE id = :id"),
+                    {"slug": computed, "id": g_id},
+                )
+        conn.commit()
+
 def get_db():
     db = SessionLocal()
     try:
@@ -41,4 +60,4 @@ def get_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Database was created")
+    print("Database was created / verified")

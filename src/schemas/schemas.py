@@ -101,12 +101,21 @@ class BannerResponse(BannerBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PaginatedBannerResponse(BaseModel):
+    items: list[BannerResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 # ============================================================================
 # Game Schemas
 # ============================================================================
 
 class GameBase(BaseModel):
     name: str
+    slug: str | None = None
 
 
 class GameCreate(GameBase):
@@ -115,10 +124,12 @@ class GameCreate(GameBase):
 
 class GameUpdate(BaseModel):
     name: str | None = None
+    slug: str | None = None
 
 
 class GameResponse(GameBase):
     id: int | None = None
+    slug: str = ""
     model_config = ConfigDict(from_attributes=True)
 
 

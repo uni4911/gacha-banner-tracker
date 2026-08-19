@@ -1,13 +1,15 @@
 from __future__ import annotations
+import math
 from datetime import datetime, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Path, Query, status
 from sqlalchemy.orm import Session
 
-from src.schemas.schemas import BannerCreate, BannerResponse
-from src.db.models import Banner, Reward, Server
+from src.schemas.schemas import BannerCreate, BannerResponse, PaginatedBannerResponse
+from src.db.models import Banner, Reward, Server, BannerType
 from src.db.database import get_db
 from src.db.service import (
+    get_banners,
     get_active_banners,
     get_upcoming_banners,
     get_character_banner_history,
@@ -16,6 +18,57 @@ from src.db.service import (
 )
 
 banner_router = APIRouter(prefix="/games/{game_name}/banners", tags=["Banners"])
+
+
+@banner_router.get(
+    "",
+    response_model=PaginatedBannerResponse,
+    summary="List banners with filters and pagination",
+)
+def list_banners(
+    game_name: Annotated[str, Path(description="Game name or slug (e.g. 'genshin-impact' or 'Genshin Impact')")],
+    version: Annotated[str | None, Query(description="Filter by game version (e.g. '5.0')")] = None,
+    phase: Annotated[int | None, Query(description="Filter by banner phase (1 or 2)")] = None,
+    banner_type: Annotated[BannerType | None, Query(description="Filter by banner type")] = None,
+    character: Annotated[str | None, Query(description="Filter by character or weapon name")] = None,
+    status_filter: Annotated[
+        Literal["all", "active", "upcoming", "ended"],
+        Query(alias="status", description="Filter by banner status (all, active, upcoming, ended)"),
+    ] = "all",
+    server: Annotated[Server | None, Query(description="Optional server region (ASIA, EUROPE, AMERICA)")] = None,
+    current_time: Annotated[
+        datetime | None,
+        Query(description="Reference datetime for active/upcoming filtering (defaults to UTC now)"),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number (starts at 1)")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Number of items per page")] = 20,
+    db: Session = Depends(get_db),
+) -> PaginatedBannerResponse:
+    """
+    Retrieve banners for a game with optional filtering by version, phase, banner type, character,
+    and lifecycle status (active, upcoming, ended), supporting server timezone offsets and pagination.
+    """
+    banners, total = get_banners(
+        game_identifier=game_name,
+        version=version,
+        phase=phase,
+        banner_type=banner_type,
+        character_name=character,
+        status=status_filter,
+        server=server,
+        current_time=current_time,
+        page=page,
+        page_size=page_size,
+        db=db,
+    )
+    total_pages = math.ceil(total / page_size) if total > 0 else 0
+    return PaginatedBannerResponse(
+        items=banners,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @banner_router.get("/active", response_model=list[BannerResponse], summary="Get active banners")

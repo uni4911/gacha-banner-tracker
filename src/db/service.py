@@ -1,17 +1,47 @@
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
+from typing import Any
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, or_
 
-from src.db.models import Game, Reward, Banner, Server
+from src.db.models import Game, Reward, Banner, Server, BannerType, slugify
 from src.db.database import SessionLocal
 
 
+def _game_filter(identifier: str):
+    """SQL filter helper matching game by exact slug, slugified name, or exact/case-insensitive name."""
+    clean = identifier.strip()
+    slug_cand = slugify(clean)
+    return or_(
+        Game.slug == clean,
+        Game.slug == slug_cand,
+        Game.name == clean,
+        Game.name.ilike(clean),
+    )
+
+
+def get_game_by_name_or_slug(session: Session, identifier: str) -> Game | None:
+    """Retrieve a Game entity by slug or name."""
+    stmt = select(Game).where(_game_filter(identifier))
+    return session.scalar(stmt)
+
+
+def get_game(identifier: str, db: Session | None = None) -> Game | None:
+    """Retrieve a single Game by slug or name."""
+    if db is not None:
+        return get_game_by_name_or_slug(db, identifier)
+    with SessionLocal() as session:
+        return get_game_by_name_or_slug(session, identifier)
+
+
 def get_or_create_game(session: Session, game_name: str) -> Game:
-    game = session.scalar(select(Game).where(Game.name == game_name))
+    game = get_game_by_name_or_slug(session, game_name)
     if not game:
-        game = Game(name=game_name)
+        game = Game(name=game_name, slug=slugify(game_name))
         session.add(game)
+        session.flush()
+    elif not game.slug:
+        game.slug = slugify(game.name)
         session.flush()
     return game
 
@@ -147,7 +177,7 @@ def get_active_banners(
             select(Banner)
             .join(Game)
             .where(
-                Game.name == game_name,
+                _game_filter(game_name),
                 Banner.start_date <= window_end,
                 or_(
                     Banner.end_date.is_(None),
@@ -206,7 +236,7 @@ def get_upcoming_banners(
             select(Banner)
             .join(Game)
             .where(
-                Game.name == game_name,
+                _game_filter(game_name),
                 Banner.start_date >= min_start_date,
             )
             .options(selectinload(Banner.rewards))
@@ -262,7 +292,7 @@ def get_character_banner_history(
             .join(Banner.game)
             .join(Banner.rewards)
             .where(
-                Game.name == game_name,
+                _game_filter(game_name),
                 Reward.name == character_name,
             )
             .options(selectinload(Banner.rewards))
@@ -287,7 +317,7 @@ def get_banners_by_version(
             select(Banner)
             .join(Banner.game)
             .where(
-                Game.name == game_name,
+                _game_filter(game_name),
                 Banner.version == version,
             )
             .options(selectinload(Banner.rewards))
@@ -298,3 +328,114 @@ def get_banners_by_version(
         return _query(db)
     with SessionLocal() as session:
         return _query(session)
+
+
+def get_banners(
+    game_identifier: str,
+    version: str | None = None,
+    phase: int | None = None,
+    banner_type: BannerType | str | None = None,
+    character_name: str | None = None,
+    status: str = "all",  # "all" | "active" | "upcoming" | "ended"
+    server: Server | None = None,
+    current_time: datetime | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session | None = None,
+) -> tuple[list[Banner], int]:
+    """
+    Unified query for listing banners with rich filtering, server timezone resolution, and pagination.
+    Returns (banners_page, total_count).
+    """
+    def _query(session: Session) -> tuple[list[Banner], int]:
+        target_time = current_time if current_time is not None else datetime.now(timezone.utc)
+        curr_utc = (
+            target_time.astimezone(timezone.utc)
+            if target_time.tzinfo is not None
+            else target_time.replace(tzinfo=timezone.utc)
+        )
+
+        stmt = (
+            select(Banner)
+            .join(Banner.game)
+            .where(_game_filter(game_identifier))
+            .options(selectinload(Banner.rewards))
+        )
+
+        if version is not None:
+            stmt = stmt.where(Banner.version == version)
+
+        if phase is not None:
+            stmt = stmt.where(Banner.phase == phase)
+
+        if banner_type is not None:
+            bt_str = banner_type.name if isinstance(banner_type, BannerType) else str(banner_type)
+            stmt = stmt.where(Banner.banner_type == bt_str)
+
+        if character_name is not None:
+            stmt = stmt.join(Banner.rewards).where(Reward.name.ilike(f"%{character_name.strip()}%"))
+
+        stmt = stmt.order_by(Banner.start_date.desc()).distinct()
+        raw_banners = list(session.scalars(stmt).all())
+
+        # Filter by lifecycle status if requested
+        filtered_banners: list[Banner] = []
+        for b in raw_banners:
+            if status == "active":
+                if b.is_active(target_time, server=server):
+                    filtered_banners.append(b)
+            elif status == "upcoming":
+                if server is not None:
+                    st = b.get_start_for_server(server)
+                    c = curr_utc.astimezone(st.tzinfo)
+                    if st > c:
+                        filtered_banners.append(b)
+                else:
+                    st = b.start_date if b.start_date.tzinfo is not None else b.start_date.replace(tzinfo=timezone.utc)
+                    if st > curr_utc:
+                        filtered_banners.append(b)
+            elif status == "ended":
+                if server is not None:
+                    et = b.get_end_for_server(server)
+                    if et is not None:
+                        c = curr_utc.astimezone(et.tzinfo)
+                        if et < c:
+                            filtered_banners.append(b)
+                else:
+                    if b.end_date is not None:
+                        et = b.end_date if b.end_date.tzinfo is not None else b.end_date.replace(tzinfo=timezone.utc)
+                        if et < curr_utc:
+                            filtered_banners.append(b)
+            else:
+                filtered_banners.append(b)
+
+        # Server-adjust dates if server is requested
+        if server is not None:
+            adjusted: list[Banner] = []
+            for b in filtered_banners:
+                adjusted.append(
+                    Banner(
+                        version=b.version,
+                        banner_type=b.banner_type,
+                        rewards=b.rewards,
+                        start_date=b.get_start_for_server(server),
+                        end_date=b.get_end_for_server(server),
+                        phase=b.phase,
+                        game_id=b.game_id,
+                        id=b.id,
+                    )
+                )
+            filtered_banners = adjusted
+
+        total = len(filtered_banners)
+        start_idx = max(0, (page - 1) * page_size)
+        end_idx = start_idx + page_size
+        paged_banners = filtered_banners[start_idx:end_idx]
+
+        return paged_banners, total
+
+    if db is not None:
+        return _query(db)
+    with SessionLocal() as session:
+        return _query(session)
+

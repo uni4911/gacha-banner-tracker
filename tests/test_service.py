@@ -320,3 +320,76 @@ def test_sql_level_active_filtering_with_permanent_and_expired(test_db):
     assert len(upcoming) == 1
     assert upcoming[0].limited_rewards[0].name == "Future Hero"
 
+
+def test_game_slug_auto_generation_and_lookup(test_db):
+    with test_db() as session:
+        game = service.get_or_create_game(session, "Honkai: Star Rail")
+        session.commit()
+        assert game.slug == "honkai-star-rail"
+
+        # Lookup by exact slug
+        found_by_slug = service.get_game_by_name_or_slug(session, "honkai-star-rail")
+        assert found_by_slug is not None
+        assert found_by_slug.id == game.id
+
+        # Lookup by exact name
+        found_by_name = service.get_game_by_name_or_slug(session, "Honkai: Star Rail")
+        assert found_by_name is not None
+        assert found_by_name.id == game.id
+
+
+def test_get_banners_unified_service_filters_and_pagination(test_db):
+    b1 = Banner(
+        version="5.0",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Mualani", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 1, 21, 0, 0, 0, tzinfo=timezone.utc),
+        phase=1,
+    )
+    b2 = Banner(
+        version="5.0",
+        banner_type=BannerType.LIMITED_WEAPON,
+        limited_rewards=[Reward(name="Surf's Up", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 1, 21, 0, 0, 0, tzinfo=timezone.utc),
+        phase=1,
+    )
+    b3 = Banner(
+        version="5.1",
+        banner_type=BannerType.LIMITED_CHARACTER,
+        limited_rewards=[Reward(name="Xilonen", rarity=5, is_featured=True)],
+        low_rate_rewards=[],
+        start_date=datetime(2026, 2, 1, 0, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 2, 21, 0, 0, 0, tzinfo=timezone.utc),
+        phase=1,
+    )
+    service.save_banners_to_db([b1, b2, b3], "Genshin Impact")
+
+    # 1. Query by slug
+    banners, total = service.get_banners("genshin-impact")
+    assert total == 3
+    assert len(banners) == 3
+
+    # 2. Filter by banner type LIMITED_WEAPON
+    weapons, total_w = service.get_banners("genshin-impact", banner_type=BannerType.LIMITED_WEAPON)
+    assert total_w == 1
+    assert weapons[0].limited_rewards[0].name == "Surf's Up"
+
+    # 3. Filter by version "5.1"
+    v51, total_v = service.get_banners("genshin-impact", version="5.1")
+    assert total_v == 1
+    assert v51[0].limited_rewards[0].name == "Xilonen"
+
+    # 4. Pagination (page_size = 2)
+    p1, total_p1 = service.get_banners("genshin-impact", page=1, page_size=2)
+    assert total_p1 == 3
+    assert len(p1) == 2
+
+    p2, total_p2 = service.get_banners("genshin-impact", page=2, page_size=2)
+    assert total_p2 == 3
+    assert len(p2) == 1
+
+

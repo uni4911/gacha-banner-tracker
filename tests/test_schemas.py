@@ -135,6 +135,7 @@ def test_game_schemas():
     g_resp = GameResponse.model_validate(g_model)
     assert g_resp.id == 1
     assert g_resp.name == "Genshin Impact"
+    assert g_resp.slug == "genshin-impact"
 
     # GameDetailResponse with banners
     start = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
@@ -158,3 +159,27 @@ def test_game_schemas():
 
     # Verify alias
     assert GameWithBannersResponse is GameDetailResponse
+
+
+def test_paginated_banner_response():
+    from src.schemas.schemas import PaginatedBannerResponse
+    start = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+    b_resp = BannerResponse(
+        id=1,
+        version="5.0",
+        phase=1,
+        banner_type=BannerType.LIMITED_CHARACTER,
+        start_date=start,
+    )
+    paginated = PaginatedBannerResponse(
+        items=[b_resp],
+        total=1,
+        page=1,
+        page_size=20,
+        total_pages=1,
+    )
+    assert paginated.total == 1
+    assert paginated.page == 1
+    assert len(paginated.items) == 1
+    assert paginated.items[0].version == "5.0"
+

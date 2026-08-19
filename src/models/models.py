@@ -14,6 +14,7 @@ from src.db.models import (
     get_server_timezone,
     SERVER_IANA_TIMEZONES,
     SERVER_FIXED_OFFSETS,
+    slugify,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "get_server_timezone",
     "SERVER_IANA_TIMEZONES",
     "SERVER_FIXED_OFFSETS",
+    "slugify",
 ]
