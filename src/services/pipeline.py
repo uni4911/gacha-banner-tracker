@@ -6,6 +6,8 @@ from src.fetcher.fetcher import (
     GenshinBannerFetcher,
     StarrailBannerFetcher,
     WutheringWavesFetcher,
+    ZenlessZoneZeroFetcher,
+    NevernessToEvernessFetcher,
 )
 from src.fetcher.fandom_image_fetcher import FandomImageFetcher
 from src.db.database import init_db
@@ -28,6 +30,16 @@ GAMES_TO_SCRAPE: list[dict[str, Any]] = [
         "name": "Wuthering Waves",
         "url": "https://www.prydwen.gg/wuthering-waves/banners",
         "fetcher_cls": WutheringWavesFetcher,
+    },
+    {
+        "name": "Zenless Zone Zero",
+        "url": "https://www.prydwen.gg/zenless/banners",
+        "fetcher_cls": ZenlessZoneZeroFetcher,
+    },
+    {
+        "name": "Neverness to Everness",
+        "url": "https://www.prydwen.gg/neverness-to-everness/banners",
+        "fetcher_cls": NevernessToEvernessFetcher,
     },
 ]
 

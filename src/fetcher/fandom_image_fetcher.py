@@ -18,6 +18,7 @@ WIKI_SUBDOMAINS: dict[str, str] = {
     "Honkai: Star Rail": "honkai-star-rail",
     "Wuthering Waves": "wutheringwaves",
     "Zenless Zone Zero": "zenless-zone-zero",
+    "Neverness to Everness": "neverness-to-everness",
 }
 
 
@@ -162,6 +163,80 @@ class FandomImageFetcher:
                     ])
                     candidates["wish"].extend([
                         f"{name_u}_Splash_Art.png",
+                        f"{name_u}.png",
+                    ])
+
+            elif "zenless" in wiki:
+                if is_character:
+                    candidates["icon"].extend([
+                        f"Agent_{name_u}_Icon.png",
+                        f"Agent_{name_u}_Portrait.png",
+                        f"Agent_{name_u}.png",
+                        f"Bangboo_{name_u}_Icon.png",
+                        f"Bangboo_{name_u}.png",
+                        f"{name_u}_Icon.png",
+                        f"Character_{name_u}_Icon.png",
+                        f"{name_u}.png",
+                    ])
+                    candidates["wish"].extend([
+                        f"Agent_{name_u}_Mindscape_Cinema.png",
+                        f"Agent_{name_u}_Full.png",
+                        f"Agent_{name_u}_Splash_Art.png",
+                        f"Agent_{name_u}_Portrait.png",
+                        f"{name_u}_Full.png",
+                        f"{name_u}_Splash_Art.png",
+                        f"{name_u}_Wish.png",
+                        f"Bangboo_{name_u}.png",
+                    ])
+                else:
+                    candidates["icon"].extend([
+                        f"W-Engine_{name_u}_Icon.png",
+                        f"W-Engine_{name_u}.png",
+                        f"W_Engine_{name_u}.png",
+                        f"Item_{name_u}.png",
+                        f"{name_u}_Icon.png",
+                        f"{name_u}.png",
+                    ])
+                    candidates["wish"].extend([
+                        f"W-Engine_{name_u}.png",
+                        f"W-Engine_{name_u}_Art.png",
+                        f"W_Engine_{name_u}.png",
+                        f"{name_u}_Art.png",
+                        f"{name_u}.png",
+                    ])
+
+            elif "neverness" in wiki:
+                if is_character:
+                    candidates["icon"].extend([
+                        f"{name_u}_Icon.png",
+                        f"Character_{name_u}_Icon.png",
+                        f"Esper_{name_u}_Icon.png",
+                        f"Agent_{name_u}_Icon.png",
+                        f"{name_u}.png",
+                        f"Character_{name_u}.png",
+                    ])
+                    candidates["wish"].extend([
+                        f"{name_u}_Splash_Art.png",
+                        f"{name_u}_Full.png",
+                        f"{name_u}_Card.png",
+                        f"{name_u}_Portrait.png",
+                        f"{name_u}.png",
+                        f"Character_{name_u}_Splash_Art.png",
+                        f"Character_{name_u}.png",
+                    ])
+                else:
+                    candidates["icon"].extend([
+                        f"Weapon_{name_u}_Icon.png",
+                        f"Weapon_{name_u}.png",
+                        f"Arc_{name_u}_Icon.png",
+                        f"Arc_{name_u}.png",
+                        f"{name_u}_Icon.png",
+                        f"{name_u}.png",
+                    ])
+                    candidates["wish"].extend([
+                        f"Weapon_{name_u}_Art.png",
+                        f"Weapon_{name_u}.png",
+                        f"Arc_{name_u}.png",
                         f"{name_u}.png",
                     ])
 

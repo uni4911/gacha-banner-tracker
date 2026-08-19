@@ -40,6 +40,8 @@ const DEFAULT_GAMES: GameOption[] = [
   resolveGameOption('Honkai: Star Rail'),
   resolveGameOption('Genshin Impact'),
   resolveGameOption('Wuthering Waves'),
+  resolveGameOption('Zenless Zone Zero'),
+  resolveGameOption('Neverness to Everness'),
 ];
 
 export function App() {

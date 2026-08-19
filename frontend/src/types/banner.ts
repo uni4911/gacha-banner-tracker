@@ -70,6 +70,13 @@ export const GAME_PRESETS: Record<string, Partial<GameOption>> = {
     badge: 'New Eridu',
     iconName: 'zap',
   },
+  'Neverness to Everness': {
+    id: 'neverness-to-everness',
+    shortName: 'NTE',
+    themeColor: '#a855f7',
+    badge: 'Hethereau',
+    iconName: 'sparkles',
+  },
   'Wuthering Waves': {
     id: 'wuthering-waves',
     shortName: 'WuWa',
@@ -143,10 +150,10 @@ export type BannerLayoutMode = 'categorized' | 'grid';
 
 export function getBannerCategory(bannerType: BannerType | string): BannerCategory {
   const t = (bannerType || '').toUpperCase();
-  if (t.includes('WEAPON') || t.includes('LIGHT_CONE')) {
+  if (t.includes('WEAPON') || t.includes('LIGHT_CONE') || t.includes('ENGINE') || t.includes('ARC')) {
     return 'WEAPON';
   }
-  if (t.includes('CHARACTER')) {
+  if (t.includes('CHARACTER') || t.includes('AGENT') || t.includes('ESPER')) {
     return 'CHARACTER';
   }
   return 'SPECIAL';
@@ -157,22 +164,31 @@ export function formatBannerType(type: string, gameName?: string): string {
   const isStarRail = g.includes('star rail') || g.includes('hsr');
   const isWuWa = g.includes('wuthering') || g.includes('wuwa');
   const isGenshin = g.includes('genshin');
+  const isZZZ = g.includes('zenless') || g.includes('zzz');
+  const isNTE = g.includes('neverness') || g.includes('nte');
 
   switch (type) {
     case 'LIMITED_CHARACTER':
       if (isStarRail) return 'Character Event Warp';
       if (isWuWa) return 'Character Convene';
       if (isGenshin) return 'Character Event Wish';
+      if (isZZZ) return 'Exclusive Channel';
+      if (isNTE) return 'Esper Convene';
       return 'Limited Character';
     case 'LIMITED_WEAPON':
       if (isStarRail) return 'Light Cone Event Warp';
       if (isWuWa) return 'Weapon Convene';
       if (isGenshin) return 'Weapon Event Wish (Epitome)';
+      if (isZZZ) return 'W-Engine Channel';
+      if (isNTE) return 'Arc Convene';
       return 'Limited Weapon';
     case 'STANDARD_CHARACTER':
+      if (isZZZ) return 'Star-Studded Cast';
       return 'Standard Character';
     case 'STANDARD_WEAPON':
-      return isStarRail ? 'Standard Light Cone' : 'Standard Weapon';
+      if (isStarRail) return 'Standard Light Cone';
+      if (isZZZ) return 'Standard W-Engine';
+      return 'Standard Weapon';
     case 'CHRONICLED':
       return 'Chronicled Wish';
     case 'STANDARD_WEAPON_AND_CHARACTER':

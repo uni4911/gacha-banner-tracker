@@ -113,6 +113,9 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
         banner_date_range = range_tag.get_text(strip=True)
         date_format = "%b %d, %Y"
 
+        if banner_date_range.strip().lower() in ("tba", "tbd", "to be announced", "unknown", ""):
+            return (None, None)
+
         if banner_date_range.lower().startswith("from "):
             date_str = banner_date_range.split("From ", 1)[1].strip()
             start_date = datetime.strptime(date_str, date_format).replace(tzinfo=timezone.utc)
@@ -147,7 +150,7 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
 
     def _determine_banner_type(self, banner: Tag) -> BannerType:
         classes = banner.get("class", [])
-        if "weapon-banner-card" in classes:
+        if "weapon-banner-card" in classes or "light-cone-card" in classes:
             return BannerType.LIMITED_WEAPON
         elif "character-banner-card" in classes:
             return BannerType.LIMITED_CHARACTER
@@ -195,6 +198,13 @@ class StarrailBannerFetcher(PrydwenBannerFetcher):
 
 class WutheringWavesFetcher(PrydwenBannerFetcher):
     WEAPON_KEYWORDS = ("weapon", "absolute pulsar")
+
+class ZenlessZoneZeroFetcher(PrydwenBannerFetcher):
+    WEAPON_KEYWORDS = ("w-engine", "engine", "bangboo", "weapon", "d-engine", "channel")
+
+class NevernessToEvernessFetcher(PrydwenBannerFetcher):
+    WEAPON_KEYWORDS = ("weapon", "blade", "light cone", "equipment", "arc", "convene")
+
 
 
              

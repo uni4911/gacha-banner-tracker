@@ -12,6 +12,7 @@ const OFFICIAL_APP_ICONS: Record<string, string> = {
   'honkai-star-rail': '/game-icons/honkai-star-rail.jpg',
   'wuthering-waves': '/game-icons/wuthering-waves.jpg',
   'zenless-zone-zero': '/game-icons/zenless-zone-zero.jpg',
+  'neverness-to-everness': '/game-icons/neverness-to-everness.jpg',
   'fate-grand-order': '/game-icons/fate-grand-order.jpg',
   'arknights': '/game-icons/arknights.jpg',
 };
@@ -246,6 +247,45 @@ export const GameIcon: React.FC<GameIconProps> = ({ id, name = '', size = 36, cl
           fill="url(#arkGrad)"
         />
         <polygon points="24,19 28,24 24,29 20,24" fill="#ffffff" />
+      </svg>
+    );
+  }
+
+  // Neverness to Everness - Urban Teleport & Esper Resonance Emblem
+  if (normalizedId.includes('neverness') || normalizedId.includes('nte') || normalizedId.includes('everness')) {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 48 48"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+        aria-label="Neverness to Everness Logo"
+      >
+        <defs>
+          <linearGradient id="nteGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#c084fc" />
+            <stop offset="50%" stopColor="#a855f7" />
+            <stop offset="100%" stopColor="#06b6d4" />
+          </linearGradient>
+          <linearGradient id="nteCore" x1="24" y1="12" x2="24" y2="36" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="100%" stopColor="#e9d5ff" />
+          </linearGradient>
+        </defs>
+        <rect x="6" y="6" width="36" height="36" rx="8" stroke="url(#nteGrad)" strokeWidth="2.2" fill="#0f0c1b" />
+        <path
+          d="M24 8 L38 24 L24 40 L10 24 Z"
+          stroke="url(#nteGrad)"
+          strokeWidth="2.2"
+          fill="none"
+        />
+        <path
+          d="M24 14 L32 24 L24 34 L16 24 Z"
+          fill="url(#nteCore)"
+        />
+        <circle cx="24" cy="24" r="3" fill="#a855f7" />
       </svg>
     );
   }

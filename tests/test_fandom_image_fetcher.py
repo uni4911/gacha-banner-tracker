@@ -19,6 +19,12 @@ def test_fandom_image_fetcher_name_variations():
     assert "Resonator_Jinhsi.png" in wuwa_cand["icon"]
     assert "Jinhsi_Splash_Art.png" in wuwa_cand["wish"]
 
+    zzz_cand = fetcher._generate_candidate_titles("Zenless Zone Zero", "Aria", is_character=True)
+    assert "Agent_Aria_Icon.png" in zzz_cand["icon"]
+
+    nte_cand = fetcher._generate_candidate_titles("Neverness to Everness", "Nanally", is_character=True)
+    assert "Nanally_Icon.png" in nte_cand["icon"]
+
 
 def test_fandom_image_fetcher_enrich_banner():
     fetcher = FandomImageFetcher()
