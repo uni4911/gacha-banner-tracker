@@ -20,7 +20,7 @@ def mock_genshin_html() -> str:
     """
 
 @patch.object(GenshinBannerFetcher, "_get_html")
-def test_fetch_banners_succses(mock_get_html, mock_genshin_html):
+def test_fetch_banners_success(mock_get_html, mock_genshin_html):
 
     mock_get_html.return_value = mock_genshin_html
 
@@ -67,3 +67,24 @@ def test_fetch_banners_phase2_timing(mock_get_html):
     assert banners[0].end_date.hour == 14
     assert banners[0].end_date.minute == 59
     assert banners[0].end_date.second == 59
+
+
+@patch.object(GenshinBannerFetcher, "_get_html")
+def test_fetch_banners_weapon_keyword_fallback(mock_get_html):
+    from src.db.models import BannerType
+    html = """
+    <section class="section-group">
+        <h3>Patch 5.0 Phase 1</h3>
+        <article class="banner-card">
+            <p class="banner-name">Epitome Invocation (Weapon Banner)</p>
+            <div class="featured-rate-ups"></div>
+            <strong data-banner-range="true">Jan 01, 2026 – Jan 21, 2026</strong>
+        </article>
+    </section>
+    """
+    mock_get_html.return_value = html
+    fetcher = GenshinBannerFetcher("https://dummy.url", "Genshin Impact")
+    banners = fetcher.fetch_banners()
+
+    assert len(banners) == 1
+    assert banners[0].banner_type == BannerType.LIMITED_WEAPON

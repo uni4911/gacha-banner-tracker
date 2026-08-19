@@ -35,10 +35,10 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
             if response.status_code == 200:
                 return response.text
             else:
-                logger.error(f"Otrzymano status {response.status_code} dla {self.url}")
+                logger.error(f"Received status code {response.status_code} for {self.url}")
                 return ""
         except Exception as e:
-            logger.error(f"Błąd podczas pobierania {self.url}: {e}", exc_info=True)
+            logger.error(f"Error fetching {self.url}: {e}", exc_info=True)
             return ""
 
     def _parse_patch_info(self, section: Tag) -> tuple[str | None, int | None]:
@@ -140,33 +140,39 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
                     # Default: active through end of day
                     end_date = end_date.replace(hour=23, minute=59, second=59)
             else:
-                logger.warning(f"Nie rozpoznano formatu daty: {banner_date_range}")
+                logger.warning(f"Unrecognized date range format: {banner_date_range}")
                 return (None, None)
                 
         return (start_date, end_date)
 
     def _determine_banner_type(self, banner: Tag) -> BannerType:
-        classes = banner.get("class",[])
+        classes = banner.get("class", [])
         if "weapon-banner-card" in classes:
             return BannerType.LIMITED_WEAPON
         elif "character-banner-card" in classes:
             return BannerType.LIMITED_CHARACTER
-        else:
-            logger.error("Nie znaleziono typu baneru")
-            return BannerType.LIMITED_CHARACTER
+        
+        # Fallback: check banner name against weapon keywords
+        name_tag = banner.find("p", class_="banner-name")
+        banner_text = name_tag.get_text(strip=True).lower() if name_tag else ""
+        if self.WEAPON_KEYWORDS and any(keyword in banner_text for keyword in self.WEAPON_KEYWORDS):
+            return BannerType.LIMITED_WEAPON
+
+        logger.warning(f"Could not determine banner type for banner card '{banner_text}', defaulting to LIMITED_CHARACTER")
+        return BannerType.LIMITED_CHARACTER
         
             
     def fetch_banners(self) -> list[Banner]:
         html = self._get_html()
         soup = BeautifulSoup(html, "html.parser")
         banners_list = []
-        sections = soup.find_all("section",class_="section-group")
+        sections = soup.find_all("section", class_="section-group")
 
         for section in sections:
             version, phase = self._parse_patch_info(section)
             if version is None:
                 continue
-            banners = section.find_all("article",class_="banner-card")
+            banners = section.find_all("article", class_="banner-card")
     
             for banner in banners:
                 limited_rewards = self._parse_limited_rewards(banner)
@@ -177,18 +183,18 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
                     continue
                 banner_type = self._determine_banner_type(banner)                     
 
-                banners_list.append(Banner(version,banner_type,limited_rewards,four_stars_rewards,start_date,end_date,phase))
+                banners_list.append(Banner(version, banner_type, limited_rewards, four_stars_rewards, start_date, end_date, phase))
 
         return banners_list
 
 class GenshinBannerFetcher(PrydwenBannerFetcher):
-    WEAPON_KEYWORDS = ("weapon",)
+    WEAPON_KEYWORDS = ("weapon", "epitome")
 
 class StarrailBannerFetcher(PrydwenBannerFetcher):
-    WEAPON_KEYWORDS = ("light cone",)
+    WEAPON_KEYWORDS = ("light cone", "brilliant fixation", "bygone reminiscence")
 
 class WutheringWavesFetcher(PrydwenBannerFetcher):
-    WEAPON_KEYWORDS = ("weapon",)
+    WEAPON_KEYWORDS = ("weapon", "absolute pulsar")
 
 
              

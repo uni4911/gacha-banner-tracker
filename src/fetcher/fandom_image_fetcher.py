@@ -1,7 +1,10 @@
+import asyncio
+import concurrent.futures
 import logging
 import re
 from pathlib import Path
 from typing import Any
+import httpx
 from curl_cffi import requests
 from src.db.models import Banner, Reward, BannerType
 
@@ -21,13 +24,15 @@ WIKI_SUBDOMAINS: dict[str, str] = {
 class FandomImageFetcher:
     """Fetches high-resolution character icons and wish/splash art from Fandom Wikis using MediaWiki API."""
 
-    def __init__(self, cache_dir: Path | None = None):
+    def __init__(self, cache_dir: Path | None = None, max_concurrency: int = 10):
         self.cache_dir = cache_dir or IMAGE_CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.max_concurrency = max_concurrency
         self.session = requests.Session(impersonate="chrome120")
-        self.session.headers.update({
+        self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        })
+        }
+        self.session.headers.update(self.headers)
 
     def _get_wiki_subdomain(self, game_name: str) -> str:
         return WIKI_SUBDOMAINS.get(game_name, game_name.lower().replace(" ", "-").replace(":", ""))
@@ -218,24 +223,84 @@ class FandomImageFetcher:
 
         return results
 
-    def download_image(self, url: str, target_path: Path) -> bool:
-        """Download image from url and save to target_path if it doesn't already exist."""
-        if target_path.exists() and target_path.stat().st_size > 0:
-            return True
+    async def download_images_async(
+        self,
+        download_tasks: list[tuple[str, Path]],
+        max_concurrency: int | None = None,
+    ) -> dict[str, bool]:
+        """
+        Download multiple images concurrently using httpx.AsyncClient and a concurrency semaphore.
+        """
+        if not download_tasks:
+            return {}
 
-        target_path.parent.mkdir(parents=True, exist_ok=True)
+        concurrency = max_concurrency or self.max_concurrency
+        semaphore = asyncio.Semaphore(concurrency)
+        results: dict[str, bool] = {}
+
+        # Deduplicate tasks by URL to prevent redundant parallel downloads of the same asset
+        unique_tasks: dict[str, Path] = {}
+        for url, path in download_tasks:
+            if url and url not in unique_tasks:
+                unique_tasks[url] = path
+
+        async with httpx.AsyncClient(headers=self.headers, follow_redirects=True, timeout=15.0) as client:
+            async def _fetch_single(url: str, target_path: Path) -> None:
+                if target_path.exists() and target_path.stat().st_size > 0:
+                    results[url] = True
+                    return
+
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                async with semaphore:
+                    try:
+                        resp = await client.get(url)
+                        if resp.status_code == 200 and resp.content:
+                            target_path.write_bytes(resp.content)
+                            logger.info(f"Downloaded image to {target_path}")
+                            results[url] = True
+                        else:
+                            logger.warning(f"Failed to download image {url} (status: {resp.status_code})")
+                            results[url] = False
+                    except Exception as exc:
+                        logger.error(f"Error downloading image {url}: {exc}")
+                        results[url] = False
+
+            await asyncio.gather(*[_fetch_single(u, p) for u, p in unique_tasks.items()])
+
+        return results
+
+    def download_images_concurrently(
+        self,
+        download_tasks: list[tuple[str, Path]],
+        max_concurrency: int | None = None,
+    ) -> dict[str, bool]:
+        """
+        Safely execute concurrent image downloads synchronously or within an active event loop.
+        """
+        if not download_tasks:
+            return {}
+
         try:
-            resp = self.session.get(url, timeout=15)
-            if resp.status_code == 200 and resp.content:
-                target_path.write_bytes(resp.content)
-                logger.info(f"Downloaded image to {target_path}")
-                return True
-            else:
-                logger.warning(f"Failed to download image {url} (status: {resp.status_code})")
-                return False
-        except Exception as e:
-            logger.error(f"Error downloading image {url}: {e}")
-            return False
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    asyncio.run,
+                    self.download_images_async(download_tasks, max_concurrency=max_concurrency),
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self.download_images_async(download_tasks, max_concurrency=max_concurrency)
+            )
+
+    def download_image(self, url: str, target_path: Path) -> bool:
+        """Download single image from url and save to target_path if it doesn't already exist."""
+        results = self.download_images_concurrently([(url, target_path)])
+        return results.get(url, False)
 
     def enrich_rewards(
         self,
@@ -265,8 +330,12 @@ class FandomImageFetcher:
         # Fetch all candidate URLs in batch
         found_urls = self.query_fandom_batch(wiki, list(all_candidate_filenames))
 
-        # Assign best matches to reward.extra_data
+        # Assign best matches to reward.extra_data and queue downloads
         game_folder_slug = wiki.replace("-", "_")
+        download_tasks: list[tuple[str, Path]] = []
+        reward_icon_refs: list[tuple[Reward, str, str]] = []
+        reward_wish_refs: list[tuple[Reward, str, str]] = []
+
         for reward, candidates in reward_candidates:
             if reward.extra_data is None:
                 reward.extra_data = {}
@@ -304,20 +373,36 @@ class FandomImageFetcher:
             if wish_url:
                 reward.extra_data["wish_url"] = wish_url
 
-            # Optionally download locally
+            # Prepare local download tasks
             if download_locally:
                 safe_name = re.sub(r"[^a-zA-Z0-9_\-]+", "_", reward.name.lower().replace(" ", "_"))
                 if icon_url:
                     ext = ".webp" if ".webp" in icon_url.lower() else ".png"
                     local_icon_path = self.cache_dir / game_folder_slug / f"{safe_name}_icon{ext}"
-                    if self.download_image(icon_url, local_icon_path):
-                        reward.extra_data["local_icon"] = f"/static/images/{game_folder_slug}/{safe_name}_icon{ext}"
+                    download_tasks.append((icon_url, local_icon_path))
+                    reward_icon_refs.append(
+                        (reward, icon_url, f"/static/images/{game_folder_slug}/{safe_name}_icon{ext}")
+                    )
 
                 if wish_url:
                     ext = ".webp" if ".webp" in wish_url.lower() else ".png"
                     local_wish_path = self.cache_dir / game_folder_slug / f"{safe_name}_wish{ext}"
-                    if self.download_image(wish_url, local_wish_path):
-                        reward.extra_data["local_wish"] = f"/static/images/{game_folder_slug}/{safe_name}_wish{ext}"
+                    download_tasks.append((wish_url, local_wish_path))
+                    reward_wish_refs.append(
+                        (reward, wish_url, f"/static/images/{game_folder_slug}/{safe_name}_wish{ext}")
+                    )
+
+        # Concurrently download all collected image assets in a single batch
+        if download_locally and download_tasks:
+            download_results = self.download_images_concurrently(download_tasks)
+
+            for reward, icon_url, static_path in reward_icon_refs:
+                if download_results.get(icon_url, False):
+                    reward.extra_data["local_icon"] = static_path
+
+            for reward, wish_url, static_path in reward_wish_refs:
+                if download_results.get(wish_url, False):
+                    reward.extra_data["local_wish"] = static_path
 
     def enrich_banners(
         self, banners: list[Banner], game_name: str, download_locally: bool = False
