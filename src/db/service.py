@@ -198,12 +198,17 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                 if not is_compatible:
                     continue
 
-                # 1. Match by version and phase (when version is known)
+                # 1. Match by version and phase, or version and featured names
                 if (
                     eb.version not in ("0.0", "Upcoming", "")
                     and banner_data.version not in ("0.0", "Upcoming", "")
                     and eb.version == banner_data.version
-                    and eb.phase == banner_data.phase
+                    and (
+                        eb.phase == banner_data.phase
+                        or eb.phase == 0
+                        or banner_data.phase == 0
+                        or bool(eb_featured_names.intersection(featured_names))
+                    )
                 ):
                     matched_banner = eb
                     break
@@ -243,7 +248,7 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                 local_icon = reward_obj.extra_data.get("local_icon") if reward_obj.extra_data else None
                 local_wish = reward_obj.extra_data.get("local_wish") if reward_obj.extra_data else None
 
-                return get_or_create_item(
+                item_entity = get_or_create_item(
                     session=session,
                     game_id=game.id,
                     name=reward_obj.name,
@@ -255,6 +260,20 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                     local_icon=local_icon,
                     local_wish=local_wish,
                 )
+
+                # Sync back any item images to reward extra_data
+                if reward_obj.extra_data is None:
+                    reward_obj.extra_data = {}
+                if item_entity.local_icon and not reward_obj.extra_data.get("local_icon"):
+                    reward_obj.extra_data["local_icon"] = item_entity.local_icon
+                if item_entity.local_wish and not reward_obj.extra_data.get("local_wish"):
+                    reward_obj.extra_data["local_wish"] = item_entity.local_wish
+                if item_entity.icon_url and not reward_obj.extra_data.get("icon_url"):
+                    reward_obj.extra_data["icon_url"] = item_entity.icon_url
+                if item_entity.wish_url and not reward_obj.extra_data.get("wish_url"):
+                    reward_obj.extra_data["wish_url"] = item_entity.wish_url
+
+                return item_entity
 
             if matched_banner is not None:
                 # Upgrade existing banner metadata with latest parsed values
@@ -278,6 +297,15 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                         updated_data = dict(r_model.extra_data or {})
                         if new_reward.extra_data:
                             updated_data.update(new_reward.extra_data)
+                        if item.local_icon and not updated_data.get("local_icon"):
+                            updated_data["local_icon"] = item.local_icon
+                        if item.local_wish and not updated_data.get("local_wish"):
+                            updated_data["local_wish"] = item.local_wish
+                        if item.icon_url and not updated_data.get("icon_url"):
+                            updated_data["icon_url"] = item.icon_url
+                        if item.wish_url and not updated_data.get("wish_url"):
+                            updated_data["wish_url"] = item.wish_url
+
                         r_model.extra_data = updated_data
                         r_model.rarity = new_reward.rarity
                         r_model.is_featured = new_reward.is_featured

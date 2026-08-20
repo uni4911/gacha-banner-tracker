@@ -3,6 +3,7 @@ import pytest
 from src.db.models import BannerType
 from src.fetcher.fetcher import (
     GenshinBannerFetcher,
+    StarrailBannerFetcher,
     ZenlessZoneZeroFetcher,
     NevernessToEvernessFetcher,
 )
@@ -153,3 +154,105 @@ def test_nte_fetcher_success(mock_get_html):
     assert banners[0].banner_type == BannerType.LIMITED_CHARACTER
     assert banners[1].limited_rewards[0].name == "Ravenous Blade"
     assert banners[1].banner_type == BannerType.LIMITED_WEAPON
+
+
+@patch.object(ZenlessZoneZeroFetcher, "_get_html")
+def test_zzz_upcoming_teased_banners_scraping(mock_get_html):
+    html = """
+    <section class="section-group">
+        <h3>Patch 3.1 Phase 1</h3>
+        <article class="banner-card character-banner-card">
+            <p class="banner-name">Remielle</p>
+            <strong data-banner-range="true">Jul 29, 2026 – Sep 08, 2026</strong>
+        </article>
+    </section>
+    <section class="section-group" id="teased-banners">
+        <h2>Upcoming Banners</h2>
+        <h3>Patch 3.1 Phase ?</h3>
+        <article class="banner-card character-banner-card">
+            <p class="banner-name">Claret</p>
+            <strong data-banner-range="true">TBA</strong>
+        </article>
+        <article class="banner-card character-banner-card">
+            <p class="banner-name">Roxy</p>
+            <strong data-banner-range="true">TBA</strong>
+        </article>
+    </section>
+    """
+    mock_get_html.return_value = html
+    fetcher = ZenlessZoneZeroFetcher("https://dummy.url", "Zenless Zone Zero")
+    banners = fetcher.fetch_banners()
+
+    assert len(banners) == 3
+    claret_banner = [b for b in banners if b.limited_rewards[0].name == "Claret"][0]
+    assert claret_banner.version == "3.1"
+    assert claret_banner.phase == 0
+    assert claret_banner.start_date is not None
+    # Estimated after Sep 08
+    assert claret_banner.start_date.month == 9
+    assert claret_banner.start_date.day == 9
+    assert claret_banner.limited_rewards[0].extra_data.get("date_tba") is True
+
+    roxy_banner = [b for b in banners if b.limited_rewards[0].name == "Roxy"][0]
+    assert roxy_banner.limited_rewards[0].name == "Roxy"
+    assert roxy_banner.limited_rewards[0].extra_data.get("date_tba") is True
+
+
+@patch.object(GenshinBannerFetcher, "_get_html")
+def test_genshin_epitome_invocation_dual_weapon_splitting(mock_get_html):
+    html = """
+    <section class="section-group" id="current-banners">
+        <h3>Patch 7.0 Phase 1</h3>
+        <article class="banner-card weapon-banner-card light-cone-card">
+            <p class="banner-name">Epitome Invocation: Whitelake Frostfeather & Crimson Moon's Semblance</p>
+            <div class="featured-rate-ups">
+                <a class="featured-rate-up">Favonius Sword</a>
+                <a class="featured-rate-up">The Bell</a>
+            </div>
+            <strong data-banner-range="true">Aug 12, 2026 – Sep 01, 2026</strong>
+        </article>
+    </section>
+    """
+    mock_get_html.return_value = html
+    fetcher = GenshinBannerFetcher("https://dummy.url", "Genshin Impact")
+    banners = fetcher.fetch_banners()
+
+    assert len(banners) == 1
+    banner = banners[0]
+    assert banner.banner_type == BannerType.LIMITED_WEAPON
+    assert len(banner.limited_rewards) == 2
+    assert banner.limited_rewards[0].name == "Whitelake Frostfeather"
+    assert banner.limited_rewards[0].rarity == 5
+    assert banner.limited_rewards[0].is_featured is True
+    assert banner.limited_rewards[1].name == "Crimson Moon's Semblance"
+    assert banner.limited_rewards[1].rarity == 5
+    assert banner.limited_rewards[1].is_featured is True
+    assert len(banner.low_rate_rewards) == 2
+
+
+@patch.object(StarrailBannerFetcher, "_get_html")
+def test_hsr_header_without_phase_inference(mock_get_html):
+    html = """
+    <section class="section-group" id="current-banners">
+        <h3>Patch 4.4</h3>
+        <h2>Current Character Banners</h2>
+        <article class="banner-card character-banner-card">
+            <p class="banner-name">Himeko Nova</p>
+            <div class="featured-rate-ups">
+                <img src="/characters/dan-heng_icon.png" />
+            </div>
+            <strong data-banner-range="true">Jul 15, 2026 – Aug 25, 2026</strong>
+        </article>
+    </section>
+    """
+    mock_get_html.return_value = html
+    fetcher = StarrailBannerFetcher("https://dummy.url", "Honkai: Star Rail")
+    banners = fetcher.fetch_banners()
+
+    assert len(banners) == 1
+    banner = banners[0]
+    assert banner.version == "4.4"
+    assert banner.phase == 1
+    assert banner.limited_rewards[0].name == "Himeko Nova"
+    assert len(banner.low_rate_rewards) == 1
+    assert banner.low_rate_rewards[0].name == "Dan Heng"

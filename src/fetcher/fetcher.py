@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from abc import ABC, abstractmethod
 from pathlib import Path
 from bs4 import BeautifulSoup, Tag
@@ -46,20 +46,31 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
         h3_text = h3_tag.get_text(strip=True) if h3_tag else ""
         h2_tag = section.find("h2")
         h2_text = h2_tag.get_text(strip=True) if h2_tag else ""
+        section_id = section.get("id", "").lower()
         combined_header = f"{h3_text} {h2_text}"
 
-        version_match = re.search(r"(?:Patch|Version|v)\s*(\d+\.\d+)", combined_header, re.IGNORECASE)
+        version_match = re.search(r"(?:Patch|Version|v)\s*(\d+\.(?:\d+|x|\?))", combined_header, re.IGNORECASE)
         phase_match = re.search(r"Phase\s*(\d+)", combined_header, re.IGNORECASE)
 
-        if version_match or phase_match:
-            version = version_match.group(1) if version_match else "0.0"
-            phase = int(phase_match.group(1)) if phase_match else 1
+        if version_match:
+            version = version_match.group(1).replace("?", "X").replace("x", "X")
+            if phase_match:
+                phase = int(phase_match.group(1))
+            elif "phase ?" in combined_header.lower() or "phase x" in combined_header.lower() or "upcoming" in combined_header.lower() or "teased" in section_id:
+                phase = 0
+            elif "phase 2" in combined_header.lower() or "next" in combined_header.lower() or section_id == "next-banner":
+                phase = 2
+            elif "phase 1" in combined_header.lower() or "current" in combined_header.lower() or section_id == "current-banners":
+                phase = 1
+            else:
+                phase = 1
             return (version, phase)
-        elif "upcoming" in combined_header.lower():
+        elif phase_match:
+            return ("0.0", int(phase_match.group(1)))
+        elif "upcoming" in combined_header.lower() or "next" in combined_header.lower() or "teased" in section_id:
             return ("Upcoming", 0)
         else:
             return (None, None)
-
 
     def _parse_limited_rewards(self, banner: Tag) -> list[Reward]:
         name_tag = banner.find("p", class_="banner-name")
@@ -76,11 +87,37 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
         extra_data: dict[str, Any] = {}
         if art_url:
             extra_data["prydwen_art"] = art_url
+            if "/characters/" in art_url:
+                slug = art_url.split("/characters/")[-1].split(".")[0].replace("_full", "").replace("_image", "")
+                slug_name = " ".join([p.capitalize() for p in slug.replace("_", "-").split("-") if p])
+                if slug_name and slug_name.lower() != char_name.lower():
+                    extra_data["character_alias"] = slug_name
+
+        # Check for dual-weapon banner titles (e.g. Genshin Epitome Invocation: Weapon A & Weapon B)
+        classes = banner.get("class", [])
+        is_weapon_card = "weapon-banner-card" in classes or "light-cone-card" in classes
+        name_lower = char_name.lower()
+
+        if "epitome invocation" in name_lower or (is_weapon_card and (" & " in char_name or " and " in name_lower)):
+            clean_str = re.sub(r"^Epitome Invocation\s*[:\-\(\[\{]?\s*", "", char_name, flags=re.IGNORECASE).strip("()[]{} ").strip()
+            # Split by &, and, /, or comma
+            weapon_parts = [w.strip() for w in re.split(r"\s*(?:&|and|/|,)\s*", clean_str) if w.strip()]
+            if len(weapon_parts) > 1:
+                return [
+                    Reward(name=w, rarity=5, is_featured=True, extra_data=dict(extra_data))
+                    for w in weapon_parts
+                ]
+            elif clean_str:
+                return [Reward(name=clean_str, rarity=5, is_featured=True, extra_data=extra_data)]
 
         return [Reward(name=char_name, rarity=5, is_featured=True, extra_data=extra_data)]
 
     def _parse_rate_up_rewards(self, banner: Tag) -> list[Reward]:
-        four_stars_div = banner.find("div", class_="featured-rate-ups") or banner.find("div", class_="banner-rate-up-icons")
+        four_stars_div = (
+            banner.find("div", class_="featured-rate-ups")
+            or banner.find("div", class_="banner-rate-up-icons")
+            or banner.find("div", class_="featured-rate-up")
+        )
         four_stars_rewards = []
 
         if four_stars_div:
@@ -91,7 +128,8 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
                     img = a.find("img")
                     icon_url = img.get("src") if img else None
                     extra = {"prydwen_icon": icon_url} if icon_url else {}
-                    four_stars_rewards.append(Reward(name=char_name, rarity=4, is_featured=False, extra_data=extra))
+                    if char_name:
+                        four_stars_rewards.append(Reward(name=char_name, rarity=4, is_featured=False, extra_data=extra))
             else:
                 for img in four_stars_div.find_all("img"):
                     alt = img.get("alt", "").strip()
@@ -100,7 +138,10 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
                         name = alt
                         if not name and "/characters/" in src:
                             slug = src.split("/characters/")[-1].split("_")[0].split(".")[0]
-                            name = slug.replace("-", " ").capitalize()
+                            name = " ".join([part.capitalize() for part in slug.replace("_", "-").split("-") if part])
+                        elif not name and ("/weapons/" in src or "/light-cones/" in src or "/w-engines/" in src):
+                            slug = src.split("/")[-1].split("_")[0].split(".")[0]
+                            name = " ".join([part.capitalize() for part in slug.replace("_", "-").split("-") if part])
                         if name:
                             four_stars_rewards.append(Reward(name=name, rarity=4, is_featured=False, extra_data={"prydwen_icon": src}))
 
@@ -111,42 +152,52 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
         if not range_tag:
             return (None, None)
         banner_date_range = range_tag.get_text(strip=True)
-        date_format = "%b %d, %Y"
+        date_formats = ["%b %d, %Y", "%b %d %Y", "%B %d, %Y", "%B %d %Y"]
 
         if banner_date_range.strip().lower() in ("tba", "tbd", "to be announced", "unknown", ""):
             return (None, None)
 
+        def _parse_single_date(date_str: str) -> datetime | None:
+            clean = date_str.strip()
+            for fmt in date_formats:
+                try:
+                    return datetime.strptime(clean, fmt).replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+            return None
+
         if banner_date_range.lower().startswith("from "):
             date_str = banner_date_range.split("From ", 1)[1].strip()
-            start_date = datetime.strptime(date_str, date_format).replace(tzinfo=timezone.utc)
-            if phase == 1:
-                start_date = start_date.replace(hour=6, minute=0, second=0)
-            elif phase == 2:
-                start_date = start_date.replace(hour=18, minute=0, second=0)
-            end_date = None 
-        else:
-            parts = [d.strip() for d in re.split(r"\s*[\u2013\u2014\u2010\u2212-]\s*", banner_date_range) if d.strip()]
-            if len(parts) == 2:
-                start_date = datetime.strptime(parts[0], date_format).replace(tzinfo=timezone.utc)
-                end_date = datetime.strptime(parts[1], date_format).replace(tzinfo=timezone.utc)
-
-                # Set accurate start and end hours based on banner phase lifecycle
+            start_date = _parse_single_date(date_str)
+            if start_date:
                 if phase == 1:
-                    # Phase 1 starts after maintenance (~06:00 UTC) and ends at 17:59:59 UTC
                     start_date = start_date.replace(hour=6, minute=0, second=0)
-                    end_date = end_date.replace(hour=17, minute=59, second=59)
                 elif phase == 2:
-                    # Phase 2 starts at 18:00:00 UTC and ends at 14:59:59 UTC (before patch maintenance)
                     start_date = start_date.replace(hour=18, minute=0, second=0)
-                    end_date = end_date.replace(hour=14, minute=59, second=59)
-                else:
-                    # Default: active through end of day
-                    end_date = end_date.replace(hour=23, minute=59, second=59)
-            else:
-                logger.warning(f"Unrecognized date range format: {banner_date_range}")
-                return (None, None)
-                
-        return (start_date, end_date)
+            return (start_date, None)
+        else:
+            parts = [d.strip() for d in re.split(r"\s*[\u2013\u2014\u2010\u2212-]\s*|\s+to\s+", banner_date_range) if d.strip()]
+            if len(parts) == 2:
+                start_date = _parse_single_date(parts[0])
+                end_date = _parse_single_date(parts[1])
+
+                if start_date and end_date:
+                    # Set accurate start and end hours based on banner phase lifecycle
+                    if phase == 1:
+                        # Phase 1 starts after maintenance (~06:00 UTC) and ends at 17:59:59 UTC
+                        start_date = start_date.replace(hour=6, minute=0, second=0)
+                        end_date = end_date.replace(hour=17, minute=59, second=59)
+                    elif phase == 2:
+                        # Phase 2 starts at 18:00:00 UTC and ends at 14:59:59 UTC (before patch maintenance)
+                        start_date = start_date.replace(hour=18, minute=0, second=0)
+                        end_date = end_date.replace(hour=14, minute=59, second=59)
+                    else:
+                        # Default: active through end of day
+                        end_date = end_date.replace(hour=23, minute=59, second=59)
+                    return (start_date, end_date)
+            
+            logger.warning(f"Unrecognized date range format: {banner_date_range}")
+            return (None, None)
 
     def _determine_banner_type(self, banner: Tag) -> BannerType:
         classes = banner.get("class", [])
@@ -168,9 +219,12 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
     def fetch_banners(self) -> list[Banner]:
         html = self._get_html()
         soup = BeautifulSoup(html, "html.parser")
-        banners_list = []
+        banners_list: list[Banner] = []
         sections = soup.find_all("section", class_="section-group")
 
+        latest_known_end_date: datetime | None = None
+
+        # First pass: parse sections and extract known dated banners while finding latest known end date
         for section in sections:
             version, phase = self._parse_patch_info(section)
             if version is None:
@@ -182,11 +236,29 @@ class PrydwenBannerFetcher(BaseBannerFetcher):
                 four_stars_rewards = self._parse_rate_up_rewards(banner)
                 start_date, end_date = self._parse_date_range(banner, phase=phase)
 
-                if start_date is None:
-                    continue
-                banner_type = self._determine_banner_type(banner)                     
+                # Track latest known end date for future TBA calculation
+                if end_date and (latest_known_end_date is None or end_date > latest_known_end_date):
+                    latest_known_end_date = end_date
 
-                banners_list.append(Banner(version, banner_type, limited_rewards, four_stars_rewards, start_date, end_date, phase))
+                # If date range is TBA or unknown, estimate upcoming start date
+                if start_date is None:
+                    fallback_start = (
+                        (latest_known_end_date + timedelta(days=1))
+                        if latest_known_end_date
+                        else (datetime.now(timezone.utc) + timedelta(days=21))
+                    )
+                    start_date = fallback_start.replace(hour=6, minute=0, second=0)
+                    end_date = None
+                    for r in limited_rewards:
+                        if r.extra_data is None:
+                            r.extra_data = {}
+                        r.extra_data["date_tba"] = True
+                        r.extra_data["schedule"] = "TBA"
+
+                banner_type = self._determine_banner_type(banner)                     
+                banners_list.append(
+                    Banner(version, banner_type, limited_rewards, four_stars_rewards, start_date, end_date, phase or 0)
+                )
 
         return banners_list
 

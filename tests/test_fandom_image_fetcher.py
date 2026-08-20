@@ -9,7 +9,7 @@ def test_fandom_image_fetcher_name_variations():
     fetcher = FandomImageFetcher()
     genshin_cand = fetcher._generate_candidate_titles("Genshin Impact", "Furina", is_character=True)
     assert "Furina_Icon.png" in genshin_cand["icon"]
-    assert "Furina_Wish.png" in genshin_cand["wish"]
+    assert "Character_Furina_Full_Wish.png" in genshin_cand["wish"]
 
     hsr_cand = fetcher._generate_candidate_titles("Honkai: Star Rail", "Acheron", is_character=True)
     assert "Character_Acheron_Icon.png" in hsr_cand["icon"]
@@ -25,8 +25,17 @@ def test_fandom_image_fetcher_name_variations():
     assert "Agent_Ellen_Joe_Portrait.png" in zzz_cand["wish"]
     assert zzz_cand["wish"][0] == "Agent_Ellen_Joe_Portrait.png"
 
-    zzz_remielle = fetcher._generate_candidate_titles("Zenless Zone Zero", "Remielle", is_character=True)
-    assert "Agent_Remielle_Dan_Portrait.png" in zzz_remielle["wish"]
+    # Dynamic MediaWiki ranking tests
+    sample_files = [
+        "Agent Claret Flint Agent Record.png",
+        "Agent Claret Flint Portrait.png",
+        "Agent Claret Flint Icon.png",
+        "VO Claret Assist.ogg",
+    ]
+    ranked = fetcher._rank_dynamic_files(sample_files, "Zenless Zone Zero", is_character=True)
+    assert "Agent Claret Flint Portrait.png" in ranked["wish"]
+    assert "Agent Claret Flint Icon.png" in ranked["icon"]
+    assert "VO Claret Assist.ogg" not in ranked["wish"]
 
     # NTE Full Body Portrait tests
     nte_cand = fetcher._generate_candidate_titles("Neverness to Everness", "Nanally", is_character=True)
@@ -36,6 +45,7 @@ def test_fandom_image_fetcher_name_variations():
     nte_mint = fetcher._generate_candidate_titles("Neverness to Everness", "Mint", is_character=True)
     assert "Mint_Portrait.png" in nte_mint["wish"]
     assert nte_mint["wish"][0] == "Mint_Portrait.png"
+
 
 
 
@@ -54,7 +64,7 @@ def test_fandom_image_fetcher_enrich_banner():
 
     mock_batch_results = {
         "Furina_Icon.png": "https://static.wikia.nocookie.net/gensin-impact/images/Furina_Icon.png",
-        "Furina_Wish.png": "https://static.wikia.nocookie.net/gensin-impact/images/Furina_Wish.png",
+        "Character_Furina_Full_Wish.png": "https://static.wikia.nocookie.net/gensin-impact/images/Character_Furina_Full_Wish.png",
         "Bennett_Icon.png": "https://static.wikia.nocookie.net/gensin-impact/images/Bennett_Icon.png",
     }
 
@@ -66,7 +76,7 @@ def test_fandom_image_fetcher_enrich_banner():
     assert "icon_url" in furina.extra_data
     assert "wish_url" in furina.extra_data
     assert "Furina_Icon.png" in furina.extra_data["icon_url"]
-    assert "Furina_Wish.png" in furina.extra_data["wish_url"]
+    assert "Character_Furina_Full_Wish.png" in furina.extra_data["wish_url"]
 
 
 def test_fandom_image_fetcher_enrich_banner_with_local_download(tmp_path):
@@ -83,12 +93,12 @@ def test_fandom_image_fetcher_enrich_banner_with_local_download(tmp_path):
 
     mock_batch_results = {
         "Furina_Icon.png": "https://example.com/Furina_Icon.png",
-        "Furina_Wish.png": "https://example.com/Furina_Wish.png",
+        "Character_Furina_Full_Wish.png": "https://example.com/Character_Furina_Full_Wish.png",
     }
 
     mock_download_results = {
         "https://example.com/Furina_Icon.png": True,
-        "https://example.com/Furina_Wish.png": True,
+        "https://example.com/Character_Furina_Full_Wish.png": True,
     }
 
     with patch.object(fetcher, "query_fandom_batch", return_value=mock_batch_results), \
@@ -167,4 +177,41 @@ def test_download_images_concurrently_sync_wrapper(tmp_path):
     assert results["https://example.com/img_sync.png"] is True
     assert target.exists()
     assert target.read_bytes() == b"sync_bytes"
+
+
+def test_weapon_icon_ranking_and_prydwen_fallback():
+    fetcher = FandomImageFetcher()
+    filenames = [
+        "Weapon Whitelake Frostfeather.png",
+        "Weapon Whitelake Frostfeather 2nd.png",
+        "Whitelake Frostfeather Wallpaper.png",
+    ]
+    ranked = fetcher._rank_dynamic_files(filenames, "Genshin Impact", is_character=False)
+    assert "Weapon Whitelake Frostfeather.png" in ranked["icon"]
+
+    # Test Prydwen art fallback when Fandom has no icon
+    banner = Banner(
+        version="3.6",
+        banner_type=BannerType.LIMITED_WEAPON,
+        limited_rewards=[
+            Reward(
+                name="Glint of Clouds",
+                rarity=5,
+                is_featured=True,
+                extra_data={"prydwen_art": "https://cdn.prydwen.gg/weapons/glint.webp"},
+            )
+        ],
+        low_rate_rewards=[],
+        start_date=datetime.now(timezone.utc),
+        end_date=None,
+        phase=1,
+    )
+
+    with patch.object(fetcher, "query_fandom_batch", return_value={}):
+        fetcher.enrich_banners([banner], "Wuthering Waves", download_locally=False)
+
+    glint = banner.limited_rewards[0]
+    assert glint.extra_data.get("wish_url") == "https://cdn.prydwen.gg/weapons/glint.webp"
+    assert glint.extra_data.get("icon_url") == "https://cdn.prydwen.gg/weapons/glint.webp"
+
 

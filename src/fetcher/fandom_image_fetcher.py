@@ -21,73 +21,35 @@ WIKI_SUBDOMAINS: dict[str, str] = {
     "Neverness to Everness": "neverness-to-everness",
 }
 
-CHARACTER_ALIASES: dict[str, list[str]] = {
-    # Zenless Zone Zero (Prydwen short name <-> Official Fandom title)
-    "Remielle": ["Remielle Dan", "Remielle"],
-    "Remielle Dan": ["Remielle"],
-    "Lucy": ["Luciana de Montefio", "Luciana Auxesis Theodora de Montefio", "Lucy"],
-    "Luciana de Montefio": ["Lucy"],
-    "Evelyn": ["Evelyn Chevalier", "Evelyn"],
-    "Evelyn Chevalier": ["Evelyn"],
-    "Miyabi": ["Hoshimi Miyabi", "Miyabi"],
-    "Hoshimi Miyabi": ["Miyabi"],
-    "Harumasa": ["Asaba Harumasa", "Harumasa"],
-    "Asaba Harumasa": ["Harumasa"],
-    "Yanagi": ["Tsukishiro Yanagi", "Yanagi"],
-    "Tsukishiro Yanagi": ["Yanagi"],
-    "Burnice": ["Burnice White", "Burnice"],
-    "Burnice White": ["Burnice"],
-    "Caesar": ["Caesar King", "Caesar"],
-    "Caesar King": ["Caesar"],
-    "Jane": ["Jane Doe", "Jane"],
-    "Jane Doe": ["Jane"],
-    "Ellen": ["Ellen Joe", "Ellen"],
-    "Ellen Joe": ["Ellen"],
-    "Seth": ["Seth Lowell", "Seth"],
-    "Seth Lowell": ["Seth"],
-    "Yuzuha": ["Ukinami Yuzuha", "Yuzuha"],
-    "Ukinami Yuzuha": ["Yuzuha"],
-    "Rina": ["Alexandrina Sebastiane", "Rina"],
-    "Alexandrina Sebastiane": ["Rina"],
-    "Nekomata": ["Nekomiya Mana", "Nekomata"],
-    "Nekomiya Mana": ["Nekomata"],
-    "Koleda": ["Koleda Belobog", "Koleda"],
-    "Koleda Belobog": ["Koleda"],
-    "Lycaon": ["Von Lycaon", "Lycaon"],
-    "Von Lycaon": ["Lycaon"],
-    "Grace": ["Grace Howard", "Grace"],
-    "Grace Howard": ["Grace"],
-    "Billy": ["Billy Kid", "Billy"],
-    "Billy Kid": ["Billy"],
-    "Anby": ["Anby Demara", "Anby"],
-    "Anby Demara": ["Anby"],
-    "Nicole": ["Nicole Demara", "Nicole"],
-    "Nicole Demara": ["Nicole"],
-    "Corin": ["Corin Wickes", "Corin"],
-    "Corin Wickes": ["Corin"],
-    "Piper": ["Piper Wheel", "Piper"],
-    "Piper Wheel": ["Piper"],
-    "Anton": ["Anton Ivanov", "Anton"],
-    "Anton Ivanov": ["Anton"],
-    "Ben": ["Ben Bigger", "Ben"],
-    "Ben Bigger": ["Ben"],
-    "Astra": ["Astra Yao", "Astra"],
-    "Astra Yao": ["Astra"],
-    "Lucia": ["Lucia Elowen", "Lucia"],
-    "Lucia Elowen": ["Lucia"],
 
-    # Neverness to Everness
-    "Nanally": ["Nanally", "Esper Nanally"],
-    "Mint": ["Mint", "Esper Mint"],
-    "Hotori": ["Hotori", "Esper Hotori"],
-    "Zankou": ["Zankou", "Esper Zankou"],
-    "Linko": ["Linko", "Esper Linko"],
-    "Shatian": ["Shatian", "Esper Shatian"],
-    "Marvis": ["Marvis", "Esper Marvis"],
-    "Paul": ["Paul", "Esper Paul"],
-    "Guorong": ["Guorong", "Esper Guorong"],
+KNOWN_CHARACTER_ALIASES: dict[str, list[str]] = {
+    "lucy": ["Luciana de Montefio", "Luciana Auxesis Theodoro de Montefio", "Lucy"],
+    "harumasa": ["Asaba Harumasa", "Harumasa"],
+    "yuzuha": ["Ukinami Yuzuha", "Yuzuha"],
+    "sigrid": ["Sigrid de L'Azur", "Sigrid"],
+    "remielle": ["Remielle Dan Seashade Pas Seul", "Remielle Dan Moonlight Whispers", "Remielle"],
+    "claret": ["Claret Flint", "Claret"],
+    "roxy": ["Roxy Ifrita Pryce", "Roxy"],
+    "ellen": ["Ellen Joe", "Ellen"],
+    "miyabi": ["Hoshimi Miyabi", "Miyabi"],
+    "yanagi": ["Tsukishiro Yanagi", "Yanagi"],
+    "piper": ["Piper Wheel", "Piper"],
+    "corin": ["Corin Wickes", "Corin"],
+    "billy": ["Billy Kid", "Billy"],
+    "anby": ["Anby Demara", "Anby"],
+    "nicole": ["Nicole Demara", "Nicole"],
+    "nekomata": ["Nekomiya Mana", "Nekomata"],
+    "grace": ["Grace Howard", "Grace"],
+    "anton": ["Anton Ivanov", "Anton"],
+    "koleda": ["Koleda Belobog", "Koleda"],
+    "ben": ["Ben Bigger", "Ben"],
+    "rina": ["Alexandrina Sebastiane", "Rina"],
+    "lycaon": ["Von Lycaon", "Lycaon"],
+    "seth": ["Seth Lowell", "Seth"],
+    "jane": ["Jane Doe", "Jane"],
+    "caesar": ["Caesar King", "Caesar"],
+    "burnice": ["Burnice White", "Burnice"],
 }
-
 
 class FandomImageFetcher:
     """Fetches high-resolution character icons and wish/splash art from Fandom Wikis using MediaWiki API."""
@@ -105,17 +67,29 @@ class FandomImageFetcher:
     def _get_wiki_subdomain(self, game_name: str) -> str:
         return WIKI_SUBDOMAINS.get(game_name, game_name.lower().replace(" ", "-").replace(":", ""))
 
-    def _get_name_variations(self, name: str) -> list[str]:
+    def _get_name_variations(self, name: str, extra_aliases: list[str] | None = None) -> list[str]:
         """Generate common spelling/alias variations for a character or weapon name."""
         cleaned = re.sub(r"\s+", " ", name.strip())
         variations = [cleaned]
 
-        # Check explicit dictionary aliases
-        if cleaned in CHARACTER_ALIASES:
-            variations.extend(CHARACTER_ALIASES[cleaned])
-        for al_key, al_list in CHARACTER_ALIASES.items():
-            if cleaned in al_list and al_key not in variations:
-                variations.append(al_key)
+        if extra_aliases:
+            for ea in extra_aliases:
+                ea_clean = re.sub(r"\s+", " ", ea.strip())
+                if ea_clean and ea_clean not in variations:
+                    variations.append(ea_clean)
+
+        # Look up known aliases
+        name_lower = cleaned.lower()
+        if name_lower in KNOWN_CHARACTER_ALIASES:
+            for a in KNOWN_CHARACTER_ALIASES[name_lower]:
+                if a not in variations:
+                    variations.append(a)
+        else:
+            for k, aliases in KNOWN_CHARACTER_ALIASES.items():
+                if k in name_lower or name_lower in k:
+                    for a in aliases:
+                        if a not in variations:
+                            variations.append(a)
 
         # Handle bullet separation (e.g. Himeko Nova -> Himeko • Nova)
         parts = cleaned.split()
@@ -162,12 +136,12 @@ class FandomImageFetcher:
         return result
 
     def _generate_candidate_titles(
-        self, game_name: str, item_name: str, is_character: bool = True
+        self, game_name: str, item_name: str, is_character: bool = True, extra_aliases: list[str] | None = None
     ) -> dict[str, list[str]]:
-        """Generate candidate wiki filenames for icons and wish/splash art across name variations."""
+        """Generate candidate wiki filenames prioritizing transparent full-body splash art without background."""
         wiki = self._get_wiki_subdomain(game_name)
         candidates: dict[str, list[str]] = {"icon": [], "wish": []}
-        name_variants = self._get_name_variations(item_name)
+        name_variants = self._get_name_variations(item_name, extra_aliases=extra_aliases)
 
         for name in name_variants:
             name_u = name.replace(" ", "_")
@@ -181,14 +155,17 @@ class FandomImageFetcher:
                         f"{name_u}_Item.png",
                         f"{name_u}.png",
                     ])
+                    # Strictly prioritize official transparent full-body Splash Art / Full Wish cutouts without background
                     candidates["wish"].extend([
-                        f"{name_u}_Wish.png",
-                        f"Character_{name_u}_Wish.png",
-                        f"{name_u}_Multi_Wish.png",
+                        f"Character_{name_u}_Full_Wish.png",
+                        f"{name_u}_Portrait.png",
+                        f"Character_{name_u}_Game.png",
                         f"Character_{name_u}_Splash_Art.png",
                         f"{name_u}_Splash_Art.png",
                         f"Character_{name_u}_Full.png",
                         f"{name_u}_Full.png",
+                        f"Character_{name_u}_Card.png",
+                        f"{name_u}_Card.png",
                     ])
                 else:
                     candidates["icon"].extend([
@@ -240,17 +217,16 @@ class FandomImageFetcher:
                         f"{name_u}_Card.png",
                         f"{name_u}.png",
                     ])
+                    # Strictly prioritize official transparent full-body sprite / splash art without background
                     candidates["wish"].extend([
-                        f"Resonator_{name_u}_Splash_Art.png",
-                        f"{name_u}_Splash_Art.png",
-                        f"{name_u}_Convene_Draw.png",
-                        f"{name_u}_Convene_Still.png",
                         f"Resonator_{name_u}_Full_Sprite.png",
                         f"{name_u}_Full_Sprite.png",
+                        f"Resonator_{name_u}_Splash_Art.png",
+                        f"{name_u}_Splash_Art.png",
                         f"Resonator_{name_u}_Full.png",
                         f"{name_u}_Full.png",
                         f"Resonator_{name_u}.png",
-                        f"{name_u}_Card.png",
+                        f"{name_u}.png",
                     ])
                 else:
                     candidates["icon"].extend([
@@ -280,23 +256,19 @@ class FandomImageFetcher:
                         f"Agent_{name_u}_Portrait.png",
                         f"Agent_{name_u}_Human_Portrait.png",
                         f"{name_u}_Portrait.png",
-                        f"Agent_{name_u}_Agent_Record.png",
-                        f"Agent_{name_u}_Agent_Record_1.png",
-                        f"Agent_{name_u}_Agent_Record_2.png",
+                        f"Agent_{name_u}_Full_Portrait.png",
                         f"Agent_{name_u}_In-Game.png",
+                        f"Agent_{name_u}_In_Game.png",
                         f"Agent_{name_u}_Splash_Art.png",
                         f"{name_u}_Splash_Art.png",
                         f"Character_{name_u}_Splash_Art.png",
-                        f"Agent_{name_u}_Full_Portrait.png",
                         f"Agent_{name_u}_Full.png",
-                        f"Agent_{name_u}_Drip_Marketing.png",
                         f"{name_u}_Full.png",
-                        f"Agent_{name_u}.png",
-                        f"{name_u}.png",
+                        f"Bangboo_{name_u}_Portrait.png",
                         f"Bangboo_{name_u}_Splash_Art.png",
                         f"Bangboo_{name_u}_Full.png",
-                        f"Bangboo_{name_u}_Portrait.png",
-                        f"Bangboo_{name_u}.png",
+                        f"Agent_{name_u}.png",
+                        f"{name_u}.png",
                     ])
                 else:
                     candidates["icon"].extend([
@@ -337,20 +309,17 @@ class FandomImageFetcher:
                         f"{name_u}_Portrait.png",
                         f"Esper_{name_u}_Portrait.png",
                         f"Character_{name_u}_Portrait.png",
-                        f"{name_u}_Card.png",
-                        f"{name_u}_in_game_Model.png",
-                        f"Esper_{name_u}_Splash_Art.png",
-                        f"{name_u}_Splash_Art.png",
-                        f"Character_{name_u}_Splash_Art.png",
                         f"Esper_{name_u}_Full_Artwork.png",
                         f"{name_u}_Full_Artwork.png",
                         f"Esper_{name_u}_Artwork.png",
                         f"{name_u}_Artwork.png",
+                        f"Esper_{name_u}_Splash_Art.png",
+                        f"{name_u}_Splash_Art.png",
+                        f"Character_{name_u}_Splash_Art.png",
                         f"Esper_{name_u}_Full.png",
                         f"Esper_{name_u}_Full_Sprite.png",
                         f"Character_{name_u}_Full.png",
                         f"{name_u}_Full.png",
-                        f"Esper_{name_u}_Drip_Marketing.png",
                         f"Esper_{name_u}.png",
                         f"Character_{name_u}.png",
                         f"{name_u}.png",
@@ -391,6 +360,83 @@ class FandomImageFetcher:
         candidates["wish"] = list(dict.fromkeys(candidates["wish"]))
         return candidates
 
+    def _search_fandom_files_dynamic(self, wiki_subdomain: str, query: str) -> list[str]:
+        """Search MediaWiki API dynamically for image files matching a character/weapon query."""
+        url = f"https://{wiki_subdomain}.fandom.com/api.php"
+        params = {
+            "action": "query",
+            "list": "search",
+            "srnamespace": 6,  # File namespace
+            "srsearch": query,
+            "srlimit": 25,
+            "format": "json",
+        }
+        try:
+            r = self.session.get(url, params=params, timeout=10).json()
+            pages = r.get("query", {}).get("search", [])
+            return [p["title"].replace("File:", "").strip() for p in pages if "title" in p]
+        except Exception as e:
+            logger.debug(f"Dynamic MediaWiki search error for {query} on {wiki_subdomain}: {e}")
+            return []
+
+    def _rank_dynamic_files(
+        self, filenames: list[str], game_name: str, is_character: bool = True
+    ) -> dict[str, list[str]]:
+        """Rank and categorize search hits from MediaWiki into prioritized transparent icon and wish candidates."""
+        wiki = self._get_wiki_subdomain(game_name)
+        icons: list[tuple[str, str]] = []
+        wishes: list[tuple[str, str]] = []
+
+        promo_exclude = [
+            ".ogg", ".mp3", ".mp4", ".gif",
+            "agent_record", "agent record",
+            "drip_marketing", "drip marketing",
+            "convene_draw", "convene draw",
+            "convene_still", "convene still",
+            "teaser", "reveal", "announcement",
+            "birthday", "shorts", "voice actor", "voice_actor",
+            "tutorial", "trailer", "showcase",
+            "wallpaper", "sheet", "expression",
+            "sticker", "hangout", "slice of life", "slice_of_life",
+            "character details", "character_details",
+            "character notes", "character_notes",
+            "talent demo", "combat intel", "item agent focus",
+            "multi wish", "multi_wish",
+        ]
+
+        if "zenless" in wiki:
+            wish_keywords = ["portrait", "human_portrait", "full_portrait", "in-game", "in_game", "splash_art", "full"]
+        elif "neverness" in wiki:
+            wish_keywords = ["portrait", "full_artwork", "artwork", "splash_art", "splash", "full"]
+        elif "wuthering" in wiki:
+            wish_keywords = ["full_sprite", "splash_art", "splash", "full"]
+        elif "genshin" in wiki:
+            wish_keywords = ["full_wish", "portrait", "game", "splash_art", "splash", "full"]
+        else:
+            wish_keywords = ["splash_art", "splash", "full_wish", "full_sprite", "portrait", "full"]
+
+        icon_keywords = ["circle_icon", "icon", "avatar", "item", "weapon", "light_cone", "w-engine", "w_engine", "card"]
+
+        for f in filenames:
+            f_lower = f.lower()
+            if any(pe in f_lower for pe in promo_exclude):
+                continue
+
+            for kw in wish_keywords:
+                if kw in f_lower.replace(" ", "_"):
+                    if f not in [item[1] for item in wishes]:
+                        wishes.append((kw, f))
+                    break
+
+            for kw in icon_keywords:
+                if kw in f_lower.replace(" ", "_"):
+                    if f not in [item[1] for item in icons]:
+                        icons.append((kw, f))
+                    break
+
+        sorted_wishes = [f for _, f in sorted(wishes, key=lambda x: wish_keywords.index(x[0]))]
+        sorted_icons = [f for _, f in sorted(icons, key=lambda x: icon_keywords.index(x[0]))]
+        return {"icon": sorted_icons, "wish": sorted_wishes}
 
     def query_fandom_batch(self, wiki_subdomain: str, filenames: list[str]) -> dict[str, str]:
         """Query MediaWiki API for a batch of filenames and return a mapping of filename -> direct URL."""
@@ -398,11 +444,12 @@ class FandomImageFetcher:
             return {}
 
         results: dict[str, str] = {}
-        chunk_size = 40  # MediaWiki limit per request is usually 50
+        # MediaWiki API allows max 50 titles per request
+        batch_size = 50
 
-        for i in range(0, len(filenames), chunk_size):
-            chunk = filenames[i : i + chunk_size]
-            titles_param = "|".join([f"File:{f}" if not f.startswith("File:") else f for f in chunk])
+        for i in range(0, len(filenames), batch_size):
+            chunk = filenames[i : i + batch_size]
+            titles_param = "|".join([f"File:{f.replace(' ', '_')}" for f in chunk])
             api_url = f"https://{wiki_subdomain}.fandom.com/api.php"
             params = {
                 "action": "query",
@@ -413,20 +460,22 @@ class FandomImageFetcher:
             }
 
             try:
-                resp = self.session.get(api_url, params=params, timeout=12)
-                if resp.status_code != 200:
-                    logger.warning(f"Fandom API returned status {resp.status_code} for {wiki_subdomain}")
+                response = self.session.get(api_url, params=params, timeout=10)
+                if response.status_code != 200:
+                    logger.warning(
+                        f"Fandom API query failed with status {response.status_code} for {wiki_subdomain}"
+                    )
                     continue
 
-                data = resp.json()
+                data = response.json()
                 pages = data.get("query", {}).get("pages", {})
 
-                for _, page_info in pages.items():
-                    if "imageinfo" in page_info and page_info["imageinfo"]:
-                        title = page_info.get("title", "")
-                        clean_title = title.replace("File:", "").strip()
-                        url = page_info["imageinfo"][0].get("url")
-                        if url:
+                for page_id, page_data in pages.items():
+                    if "imageinfo" in page_data and page_data["imageinfo"]:
+                        url = page_data["imageinfo"][0]["url"]
+                        raw_title = page_data.get("title", "")
+                        clean_title = raw_title.replace("File:", "").strip()
+                        if clean_title:
                             results[clean_title] = url
                             # Also map underscore variant
                             results[clean_title.replace(" ", "_")] = url
@@ -541,35 +590,69 @@ class FandomImageFetcher:
             if not (has_icon and has_wish):
                 rewards_to_query.append(reward)
 
-        # Collect candidate filenames for rewards needing lookups
+        # 1. Collect candidate filenames from naming patterns
         reward_candidates: list[tuple[Reward, dict[str, list[str]]]] = []
         all_candidate_filenames: set[str] = set()
 
         for reward in rewards_to_query:
             is_char = not is_weapon_banner
-            candidates = self._generate_candidate_titles(game_name, reward.name, is_character=is_char)
+            alias = reward.extra_data.get("character_alias") if reward.extra_data else None
+            extra_aliases = [alias] if alias else None
+            candidates = self._generate_candidate_titles(
+                game_name, reward.name, is_character=is_char, extra_aliases=extra_aliases
+            )
             reward_candidates.append((reward, candidates))
             if not (reward.extra_data.get("icon_url") or reward.extra_data.get("local_icon")):
                 all_candidate_filenames.update(candidates["icon"])
             if not (reward.extra_data.get("wish_url") or reward.extra_data.get("local_wish")):
                 all_candidate_filenames.update(candidates["wish"])
 
-        # Fetch all candidate URLs in batch
+        # Fetch candidate URLs in batch
         found_urls = self.query_fandom_batch(wiki, list(all_candidate_filenames)) if all_candidate_filenames else {}
 
-        # Assign best matches to reward.extra_data and queue downloads
+        # 2. Dynamic discovery fallback for any rewards that didn't hit pattern candidates
+        dynamic_unresolved_candidates: list[tuple[Reward, dict[str, list[str]]]] = []
+        dynamic_filenames: set[str] = set()
+
+        for reward, candidates in reward_candidates:
+            has_matched_icon = any(c in found_urls or c.replace("_", " ") in found_urls for c in candidates["icon"])
+            has_matched_wish = any(c in found_urls or c.replace("_", " ") in found_urls for c in candidates["wish"])
+
+            if not (has_matched_icon and has_matched_wish):
+                is_char = not is_weapon_banner
+                discovered_files = self._search_fandom_files_dynamic(wiki, reward.name)
+                alias = reward.extra_data.get("character_alias") if reward.extra_data else None
+                if alias and alias.lower() != reward.name.lower():
+                    discovered_files.extend(self._search_fandom_files_dynamic(wiki, alias))
+                if discovered_files:
+                    ranked = self._rank_dynamic_files(discovered_files, game_name, is_character=is_char)
+                    dynamic_unresolved_candidates.append((reward, ranked))
+                    dynamic_filenames.update(ranked["icon"])
+                    dynamic_filenames.update(ranked["wish"])
+
+        if dynamic_filenames:
+            dynamic_urls = self.query_fandom_batch(wiki, list(dynamic_filenames))
+            found_urls.update(dynamic_urls)
+
+        # 3. Assign best matches to reward.extra_data and queue downloads
         game_folder_slug = wiki.replace("-", "_")
         download_tasks: list[tuple[str, Path]] = []
         reward_icon_refs: list[tuple[Reward, str, str]] = []
         reward_wish_refs: list[tuple[Reward, str, str]] = []
 
+        # Merge dynamic candidates into main candidate list for each reward
+        dynamic_map = {r: c for r, c in dynamic_unresolved_candidates}
+
         for reward, candidates in reward_candidates:
             if reward.extra_data is None:
                 reward.extra_data = {}
 
+            all_icon_cands = candidates["icon"] + dynamic_map.get(reward, {}).get("icon", [])
+            all_wish_cands = candidates["wish"] + dynamic_map.get(reward, {}).get("wish", [])
+
             # Match Icon
             icon_url: str | None = None
-            for icon_cand in candidates["icon"]:
+            for icon_cand in all_icon_cands:
                 if icon_cand in found_urls:
                     icon_url = found_urls[icon_cand]
                     break
@@ -579,7 +662,7 @@ class FandomImageFetcher:
 
             # Match Wish / Splash Art
             wish_url: str | None = None
-            for wish_cand in candidates["wish"]:
+            for wish_cand in all_wish_cands:
                 if wish_cand in found_urls:
                     wish_url = found_urls[wish_cand]
                     break
@@ -587,13 +670,25 @@ class FandomImageFetcher:
                     wish_url = found_urls[wish_cand.replace("_", " ")]
                     break
 
-            # If Fandom didn't find wish art, fallback to prydwen_art
+            # If Fandom didn't find wish art, fallback to prydwen_art or prydwen_icon
             if not wish_url and reward.extra_data.get("prydwen_art"):
                 wish_url = reward.extra_data["prydwen_art"]
 
-            # If Fandom didn't find icon, fallback to prydwen_icon
+            # If Fandom didn't find icon, fallback to prydwen_icon or prydwen_art
             if not icon_url and reward.extra_data.get("prydwen_icon"):
                 icon_url = reward.extra_data["prydwen_icon"]
+
+            # Cross-fallback: if icon is still missing, fallback to wish_url or prydwen_art
+            if not icon_url and wish_url:
+                icon_url = wish_url
+            elif not icon_url and reward.extra_data.get("prydwen_art"):
+                icon_url = reward.extra_data["prydwen_art"]
+
+            # Cross-fallback: if wish is still missing, fallback to icon_url or prydwen_icon
+            if not wish_url and icon_url:
+                wish_url = icon_url
+            elif not wish_url and reward.extra_data.get("prydwen_icon"):
+                wish_url = reward.extra_data["prydwen_icon"]
 
             if icon_url:
                 reward.extra_data["icon_url"] = icon_url

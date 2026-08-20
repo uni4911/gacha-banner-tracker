@@ -206,15 +206,38 @@ export const BannerCard: React.FC<BannerCardProps> = ({
 
   const getFeaturedWishUrl = (): string | null => {
     if (!fiveStarRewards.length) return null;
-    const data = fiveStarRewards[0]?.extra_data;
-    if (!data) return null;
-    return data.local_wish || data.wish_url || null;
+    const firstReward = fiveStarRewards[0];
+    const data = firstReward?.extra_data;
+    const item = firstReward?.item;
+    return (
+      item?.local_wish ||
+      item?.wish_url ||
+      data?.local_wish ||
+      data?.wish_url ||
+      data?.local_icon ||
+      data?.icon_url ||
+      (data?.prydwen_art as string | undefined) ||
+      (data?.prydwen_icon as string | undefined) ||
+      null
+    );
   };
 
   const getRewardIconUrl = (reward: Reward): string | null => {
     const data = reward.extra_data;
-    if (!data) return null;
-    return data.local_icon || data.icon_url || null;
+    const item = reward.item;
+    return (
+      item?.local_icon ||
+      item?.icon_url ||
+      data?.local_icon ||
+      data?.icon_url ||
+      item?.local_wish ||
+      item?.wish_url ||
+      data?.local_wish ||
+      data?.wish_url ||
+      (data?.prydwen_icon as string | undefined) ||
+      (data?.prydwen_art as string | undefined) ||
+      null
+    );
   };
 
   const featuredWishUrl = getFeaturedWishUrl();
