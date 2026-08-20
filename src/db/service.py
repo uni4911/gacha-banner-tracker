@@ -101,14 +101,14 @@ def get_or_create_item(
         session.add(item)
         session.flush()
     else:
-        # Merge newly discovered images or extra_data if missing
-        if icon_url and not item.icon_url:
+        # Merge newly discovered images or extra_data
+        if icon_url:
             item.icon_url = icon_url
-        if wish_url and not item.wish_url:
+        if wish_url:
             item.wish_url = wish_url
-        if local_icon and not item.local_icon:
+        if local_icon:
             item.local_icon = local_icon
-        if local_wish and not item.local_wish:
+        if local_wish:
             item.local_wish = local_wish
         if extra_data:
             merged = dict(item.extra_data or {})
@@ -157,23 +157,47 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
             if not banner_data.limited_rewards:
                 continue
 
-            featured_name = banner_data.limited_rewards[0].name
+            featured_names = [
+                r.name.strip() for r in banner_data.limited_rewards if r.name and r.name.strip()
+            ]
+            if not featured_names:
+                continue
 
-            # Query existing banners for this game featuring the same character/weapon
+            # Query existing banners for this game featuring any of the same characters/weapons
             stmt = (
                 select(Banner)
                 .join(Banner.rewards)
                 .where(
                     Banner.game_id == game.id,
-                    Reward.name == featured_name,
+                    Reward.name.in_(featured_names),
                     Reward.is_featured.is_(True),
                 )
                 .options(selectinload(Banner.rewards).selectinload(Reward.item))
             )
-            existing_candidates = session.scalars(stmt).all()
+            existing_candidates = session.scalars(stmt).unique().all()
+
+            target_bt = (
+                banner_data.banner_type.name
+                if isinstance(banner_data.banner_type, BannerType)
+                else str(banner_data.banner_type)
+            )
 
             matched_banner: Banner | None = None
             for eb in existing_candidates:
+                eb_featured_names = {
+                    r.name.strip() for r in eb.limited_rewards if r.name and r.name.strip()
+                }
+                eb_bt = (
+                    eb.banner_type.name
+                    if isinstance(eb.banner_type, BannerType)
+                    else str(eb.banner_type)
+                )
+
+                # Check if banners are compatible (same banner type or overlapping featured items)
+                is_compatible = (eb_bt == target_bt) or bool(eb_featured_names.intersection(featured_names))
+                if not is_compatible:
+                    continue
+
                 # 1. Match by version and phase (when version is known)
                 if (
                     eb.version not in ("0.0", "Upcoming", "")
@@ -204,9 +228,9 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                     break
 
             def _resolve_item_for_reward(reward_obj: Reward) -> Item:
-                is_weapon_banner = banner_data.banner_type in (
-                    BannerType.LIMITED_WEAPON,
-                    BannerType.STANDARD_WEAPON,
+                is_weapon_banner = target_bt in (
+                    BannerType.LIMITED_WEAPON.name,
+                    BannerType.STANDARD_WEAPON.name,
                     "LIMITED_WEAPON",
                     "STANDARD_WEAPON",
                 )
@@ -242,6 +266,8 @@ def save_banners_to_db(banners: list[Banner], game_name: str, db: Session | None
                     matched_banner.start_date = banner_data.start_date
                 if banner_data.end_date is not None:
                     matched_banner.end_date = banner_data.end_date
+                if banner_data.banner_type:
+                    matched_banner.banner_type = target_bt
 
                 # Update or add reward extra_data and ensure items are linked
                 existing_rewards_by_name = {r.name: r for r in matched_banner.rewards}

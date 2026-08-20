@@ -19,11 +19,25 @@ def test_fandom_image_fetcher_name_variations():
     assert "Resonator_Jinhsi.png" in wuwa_cand["icon"]
     assert "Jinhsi_Splash_Art.png" in wuwa_cand["wish"]
 
-    zzz_cand = fetcher._generate_candidate_titles("Zenless Zone Zero", "Aria", is_character=True)
-    assert "Agent_Aria_Icon.png" in zzz_cand["icon"]
+    # ZZZ Agent Portrait tests
+    zzz_cand = fetcher._generate_candidate_titles("Zenless Zone Zero", "Ellen Joe", is_character=True)
+    assert "Agent_Ellen_Joe_Icon.png" in zzz_cand["icon"]
+    assert "Agent_Ellen_Joe_Portrait.png" in zzz_cand["wish"]
+    assert zzz_cand["wish"][0] == "Agent_Ellen_Joe_Portrait.png"
 
+    zzz_remielle = fetcher._generate_candidate_titles("Zenless Zone Zero", "Remielle", is_character=True)
+    assert "Agent_Remielle_Dan_Portrait.png" in zzz_remielle["wish"]
+
+    # NTE Full Body Portrait tests
     nte_cand = fetcher._generate_candidate_titles("Neverness to Everness", "Nanally", is_character=True)
-    assert "Nanally_Icon.png" in nte_cand["icon"]
+    assert "Nanally_Portrait.png" in nte_cand["wish"]
+    assert nte_cand["wish"][0] == "Nanally_Portrait.png"
+
+    nte_mint = fetcher._generate_candidate_titles("Neverness to Everness", "Mint", is_character=True)
+    assert "Mint_Portrait.png" in nte_mint["wish"]
+    assert nte_mint["wish"][0] == "Mint_Portrait.png"
+
+
 
 
 def test_fandom_image_fetcher_enrich_banner():

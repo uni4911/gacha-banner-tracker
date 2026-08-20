@@ -21,6 +21,73 @@ WIKI_SUBDOMAINS: dict[str, str] = {
     "Neverness to Everness": "neverness-to-everness",
 }
 
+CHARACTER_ALIASES: dict[str, list[str]] = {
+    # Zenless Zone Zero (Prydwen short name <-> Official Fandom title)
+    "Remielle": ["Remielle Dan", "Remielle"],
+    "Remielle Dan": ["Remielle"],
+    "Lucy": ["Luciana de Montefio", "Luciana Auxesis Theodora de Montefio", "Lucy"],
+    "Luciana de Montefio": ["Lucy"],
+    "Evelyn": ["Evelyn Chevalier", "Evelyn"],
+    "Evelyn Chevalier": ["Evelyn"],
+    "Miyabi": ["Hoshimi Miyabi", "Miyabi"],
+    "Hoshimi Miyabi": ["Miyabi"],
+    "Harumasa": ["Asaba Harumasa", "Harumasa"],
+    "Asaba Harumasa": ["Harumasa"],
+    "Yanagi": ["Tsukishiro Yanagi", "Yanagi"],
+    "Tsukishiro Yanagi": ["Yanagi"],
+    "Burnice": ["Burnice White", "Burnice"],
+    "Burnice White": ["Burnice"],
+    "Caesar": ["Caesar King", "Caesar"],
+    "Caesar King": ["Caesar"],
+    "Jane": ["Jane Doe", "Jane"],
+    "Jane Doe": ["Jane"],
+    "Ellen": ["Ellen Joe", "Ellen"],
+    "Ellen Joe": ["Ellen"],
+    "Seth": ["Seth Lowell", "Seth"],
+    "Seth Lowell": ["Seth"],
+    "Yuzuha": ["Ukinami Yuzuha", "Yuzuha"],
+    "Ukinami Yuzuha": ["Yuzuha"],
+    "Rina": ["Alexandrina Sebastiane", "Rina"],
+    "Alexandrina Sebastiane": ["Rina"],
+    "Nekomata": ["Nekomiya Mana", "Nekomata"],
+    "Nekomiya Mana": ["Nekomata"],
+    "Koleda": ["Koleda Belobog", "Koleda"],
+    "Koleda Belobog": ["Koleda"],
+    "Lycaon": ["Von Lycaon", "Lycaon"],
+    "Von Lycaon": ["Lycaon"],
+    "Grace": ["Grace Howard", "Grace"],
+    "Grace Howard": ["Grace"],
+    "Billy": ["Billy Kid", "Billy"],
+    "Billy Kid": ["Billy"],
+    "Anby": ["Anby Demara", "Anby"],
+    "Anby Demara": ["Anby"],
+    "Nicole": ["Nicole Demara", "Nicole"],
+    "Nicole Demara": ["Nicole"],
+    "Corin": ["Corin Wickes", "Corin"],
+    "Corin Wickes": ["Corin"],
+    "Piper": ["Piper Wheel", "Piper"],
+    "Piper Wheel": ["Piper"],
+    "Anton": ["Anton Ivanov", "Anton"],
+    "Anton Ivanov": ["Anton"],
+    "Ben": ["Ben Bigger", "Ben"],
+    "Ben Bigger": ["Ben"],
+    "Astra": ["Astra Yao", "Astra"],
+    "Astra Yao": ["Astra"],
+    "Lucia": ["Lucia Elowen", "Lucia"],
+    "Lucia Elowen": ["Lucia"],
+
+    # Neverness to Everness
+    "Nanally": ["Nanally", "Esper Nanally"],
+    "Mint": ["Mint", "Esper Mint"],
+    "Hotori": ["Hotori", "Esper Hotori"],
+    "Zankou": ["Zankou", "Esper Zankou"],
+    "Linko": ["Linko", "Esper Linko"],
+    "Shatian": ["Shatian", "Esper Shatian"],
+    "Marvis": ["Marvis", "Esper Marvis"],
+    "Paul": ["Paul", "Esper Paul"],
+    "Guorong": ["Guorong", "Esper Guorong"],
+}
+
 
 class FandomImageFetcher:
     """Fetches high-resolution character icons and wish/splash art from Fandom Wikis using MediaWiki API."""
@@ -43,20 +110,31 @@ class FandomImageFetcher:
         cleaned = re.sub(r"\s+", " ", name.strip())
         variations = [cleaned]
 
+        # Check explicit dictionary aliases
+        if cleaned in CHARACTER_ALIASES:
+            variations.extend(CHARACTER_ALIASES[cleaned])
+        for al_key, al_list in CHARACTER_ALIASES.items():
+            if cleaned in al_list and al_key not in variations:
+                variations.append(al_key)
+
         # Handle bullet separation (e.g. Himeko Nova -> Himeko • Nova)
         parts = cleaned.split()
         if len(parts) == 2 and "•" not in cleaned:
             variations.append(f"{parts[0]} • {parts[1]}")
-            variations.append(parts[0])  # Base name fallback (e.g. Himeko)
+            variations.append(parts[0])  # Base / First name fallback (e.g. Himeko, Ellen, Asaba)
+            variations.append(parts[1])  # Last name / Given name fallback (e.g. Harumasa, Miyabi, Yanagi, Joe)
         elif len(parts) >= 3 and "•" not in cleaned:
             variations.append(f"{parts[0]} • {' '.join(parts[1:])}")
             variations.append(f"{' '.join(parts[:2])} • {' '.join(parts[2:])}")
             variations.append(" ".join(parts[:2]))
+            variations.append(" ".join(parts[1:]))
             variations.append(parts[0])
+            variations.append(parts[-1])
 
         if "•" in cleaned:
             variations.append(cleaned.replace("•", " ").replace("  ", " ").strip())
             variations.append(cleaned.split("•")[0].strip())
+            variations.append(cleaned.split("•")[-1].strip())
 
         # Handle 'The Shorekeeper' <-> 'Shorekeeper'
         if cleaned.lower().startswith("the "):
@@ -101,11 +179,16 @@ class FandomImageFetcher:
                         f"{name_u}_Side_Icon.png",
                         f"Character_{name_u}_Icon.png",
                         f"{name_u}_Item.png",
+                        f"{name_u}.png",
                     ])
                     candidates["wish"].extend([
                         f"{name_u}_Wish.png",
-                        f"{name_u}_Multi_Wish.png",
                         f"Character_{name_u}_Wish.png",
+                        f"{name_u}_Multi_Wish.png",
+                        f"Character_{name_u}_Splash_Art.png",
+                        f"{name_u}_Splash_Art.png",
+                        f"Character_{name_u}_Full.png",
+                        f"{name_u}_Full.png",
                     ])
                 else:
                     candidates["icon"].extend([
@@ -123,11 +206,16 @@ class FandomImageFetcher:
                     candidates["icon"].extend([
                         f"Character_{name_u}_Icon.png",
                         f"{name_u}_Icon.png",
+                        f"Character_{name_u}_Avatar.png",
+                        f"{name_u}_Avatar.png",
                         f"Character_{name_u}.png",
+                        f"{name_u}.png",
                     ])
                     candidates["wish"].extend([
                         f"Character_{name_u}_Splash_Art.png",
                         f"{name_u}_Splash_Art.png",
+                        f"Character_{name_u}_Full.png",
+                        f"{name_u}_Full.png",
                         f"Character_{name_u}_Wish.png",
                         f"Character_{name_u}_Introduction.png",
                     ])
@@ -147,14 +235,22 @@ class FandomImageFetcher:
                     candidates["icon"].extend([
                         f"Resonator_{name_u}.png",
                         f"{name_u}_Icon.png",
+                        f"Resonator_{name_u}_Icon.png",
                         f"{name_u}Card.png",
                         f"{name_u}_Card.png",
+                        f"{name_u}.png",
                     ])
                     candidates["wish"].extend([
+                        f"Resonator_{name_u}_Splash_Art.png",
                         f"{name_u}_Splash_Art.png",
                         f"{name_u}_Convene_Draw.png",
                         f"{name_u}_Convene_Still.png",
+                        f"Resonator_{name_u}_Full_Sprite.png",
                         f"{name_u}_Full_Sprite.png",
+                        f"Resonator_{name_u}_Full.png",
+                        f"{name_u}_Full.png",
+                        f"Resonator_{name_u}.png",
+                        f"{name_u}_Card.png",
                     ])
                 else:
                     candidates["icon"].extend([
@@ -170,22 +266,36 @@ class FandomImageFetcher:
                 if is_character:
                     candidates["icon"].extend([
                         f"Agent_{name_u}_Icon.png",
+                        f"{name_u}_Icon.png",
                         f"Agent_{name_u}_Portrait.png",
+                        f"Agent_{name_u}_Avatar.png",
                         f"Agent_{name_u}.png",
                         f"Bangboo_{name_u}_Icon.png",
                         f"Bangboo_{name_u}.png",
-                        f"{name_u}_Icon.png",
                         f"Character_{name_u}_Icon.png",
                         f"{name_u}.png",
                     ])
+                    # Strictly prioritize official full transparent Agent Portrait (as displayed on Fandom Media)
                     candidates["wish"].extend([
-                        f"Agent_{name_u}_Mindscape_Cinema.png",
-                        f"Agent_{name_u}_Full.png",
-                        f"Agent_{name_u}_Splash_Art.png",
                         f"Agent_{name_u}_Portrait.png",
-                        f"{name_u}_Full.png",
+                        f"Agent_{name_u}_Human_Portrait.png",
+                        f"{name_u}_Portrait.png",
+                        f"Agent_{name_u}_Agent_Record.png",
+                        f"Agent_{name_u}_Agent_Record_1.png",
+                        f"Agent_{name_u}_Agent_Record_2.png",
+                        f"Agent_{name_u}_In-Game.png",
+                        f"Agent_{name_u}_Splash_Art.png",
                         f"{name_u}_Splash_Art.png",
-                        f"{name_u}_Wish.png",
+                        f"Character_{name_u}_Splash_Art.png",
+                        f"Agent_{name_u}_Full_Portrait.png",
+                        f"Agent_{name_u}_Full.png",
+                        f"Agent_{name_u}_Drip_Marketing.png",
+                        f"{name_u}_Full.png",
+                        f"Agent_{name_u}.png",
+                        f"{name_u}.png",
+                        f"Bangboo_{name_u}_Splash_Art.png",
+                        f"Bangboo_{name_u}_Full.png",
+                        f"Bangboo_{name_u}_Portrait.png",
                         f"Bangboo_{name_u}.png",
                     ])
                 else:
@@ -193,36 +303,57 @@ class FandomImageFetcher:
                         f"W-Engine_{name_u}_Icon.png",
                         f"W-Engine_{name_u}.png",
                         f"W_Engine_{name_u}.png",
+                        f"Item_{name_u}_Icon.png",
                         f"Item_{name_u}.png",
                         f"{name_u}_Icon.png",
                         f"{name_u}.png",
                     ])
                     candidates["wish"].extend([
-                        f"W-Engine_{name_u}.png",
                         f"W-Engine_{name_u}_Art.png",
+                        f"W-Engine_{name_u}_Splash_Art.png",
+                        f"W-Engine_{name_u}.png",
+                        f"W_Engine_{name_u}_Art.png",
                         f"W_Engine_{name_u}.png",
                         f"{name_u}_Art.png",
+                        f"{name_u}_Splash_Art.png",
                         f"{name_u}.png",
                     ])
 
             elif "neverness" in wiki:
                 if is_character:
                     candidates["icon"].extend([
-                        f"{name_u}_Icon.png",
-                        f"Character_{name_u}_Icon.png",
                         f"Esper_{name_u}_Icon.png",
+                        f"Character_{name_u}_Icon.png",
+                        f"{name_u}_Icon.png",
+                        f"Esper_{name_u}_Avatar.png",
+                        f"Esper_{name_u}_Portrait.png",
+                        f"Esper_{name_u}.png",
                         f"Agent_{name_u}_Icon.png",
-                        f"{name_u}.png",
                         f"Character_{name_u}.png",
+                        f"{name_u}.png",
                     ])
+                    # Strictly prioritize high-resolution full body Portrait art (e.g. Nanally_Portrait.png, Mint_Portrait.png)
                     candidates["wish"].extend([
-                        f"{name_u}_Splash_Art.png",
-                        f"{name_u}_Full.png",
-                        f"{name_u}_Card.png",
                         f"{name_u}_Portrait.png",
-                        f"{name_u}.png",
+                        f"Esper_{name_u}_Portrait.png",
+                        f"Character_{name_u}_Portrait.png",
+                        f"{name_u}_Card.png",
+                        f"{name_u}_in_game_Model.png",
+                        f"Esper_{name_u}_Splash_Art.png",
+                        f"{name_u}_Splash_Art.png",
                         f"Character_{name_u}_Splash_Art.png",
+                        f"Esper_{name_u}_Full_Artwork.png",
+                        f"{name_u}_Full_Artwork.png",
+                        f"Esper_{name_u}_Artwork.png",
+                        f"{name_u}_Artwork.png",
+                        f"Esper_{name_u}_Full.png",
+                        f"Esper_{name_u}_Full_Sprite.png",
+                        f"Character_{name_u}_Full.png",
+                        f"{name_u}_Full.png",
+                        f"Esper_{name_u}_Drip_Marketing.png",
+                        f"Esper_{name_u}.png",
                         f"Character_{name_u}.png",
+                        f"{name_u}.png",
                     ])
                 else:
                     candidates["icon"].extend([
@@ -234,9 +365,14 @@ class FandomImageFetcher:
                         f"{name_u}.png",
                     ])
                     candidates["wish"].extend([
+                        f"Weapon_{name_u}_Splash_Art.png",
                         f"Weapon_{name_u}_Art.png",
                         f"Weapon_{name_u}.png",
+                        f"Arc_{name_u}_Art.png",
+                        f"Arc_{name_u}_Splash_Art.png",
                         f"Arc_{name_u}.png",
+                        f"{name_u}_Art.png",
+                        f"{name_u}_Splash_Art.png",
                         f"{name_u}.png",
                     ])
 
@@ -254,6 +390,7 @@ class FandomImageFetcher:
         candidates["icon"] = list(dict.fromkeys(candidates["icon"]))
         candidates["wish"] = list(dict.fromkeys(candidates["wish"]))
         return candidates
+
 
     def query_fandom_batch(self, wiki_subdomain: str, filenames: list[str]) -> dict[str, str]:
         """Query MediaWiki API for a batch of filenames and return a mapping of filename -> direct URL."""
@@ -302,9 +439,11 @@ class FandomImageFetcher:
         self,
         download_tasks: list[tuple[str, Path]],
         max_concurrency: int | None = None,
+        overwrite: bool = True,
     ) -> dict[str, bool]:
         """
-        Download multiple images concurrently using httpx.AsyncClient and a concurrency semaphore.
+        Download multiple images asynchronously with bounded concurrency.
+        Returns a mapping of url -> success_bool.
         """
         if not download_tasks:
             return {}
@@ -321,7 +460,7 @@ class FandomImageFetcher:
 
         async with httpx.AsyncClient(headers=self.headers, follow_redirects=True, timeout=15.0) as client:
             async def _fetch_single(url: str, target_path: Path) -> None:
-                if target_path.exists() and target_path.stat().st_size > 0:
+                if not overwrite and target_path.exists() and target_path.stat().st_size > 0:
                     results[url] = True
                     return
 
@@ -348,6 +487,7 @@ class FandomImageFetcher:
         self,
         download_tasks: list[tuple[str, Path]],
         max_concurrency: int | None = None,
+        overwrite: bool = True,
     ) -> dict[str, bool]:
         """
         Safely execute concurrent image downloads synchronously or within an active event loop.
@@ -364,17 +504,17 @@ class FandomImageFetcher:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(
                     asyncio.run,
-                    self.download_images_async(download_tasks, max_concurrency=max_concurrency),
+                    self.download_images_async(download_tasks, max_concurrency=max_concurrency, overwrite=overwrite),
                 )
                 return future.result()
         else:
             return asyncio.run(
-                self.download_images_async(download_tasks, max_concurrency=max_concurrency)
+                self.download_images_async(download_tasks, max_concurrency=max_concurrency, overwrite=overwrite)
             )
 
-    def download_image(self, url: str, target_path: Path) -> bool:
-        """Download single image from url and save to target_path if it doesn't already exist."""
-        results = self.download_images_concurrently([(url, target_path)])
+    def download_image(self, url: str, target_path: Path, overwrite: bool = True) -> bool:
+        """Download single image from url and save to target_path."""
+        results = self.download_images_concurrently([(url, target_path)], overwrite=overwrite)
         return results.get(url, False)
 
     def enrich_rewards(

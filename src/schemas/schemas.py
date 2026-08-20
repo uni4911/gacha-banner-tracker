@@ -218,3 +218,33 @@ class SyncTriggerResponse(BaseModel):
     duration_seconds: float | None = None
     results: dict[str, int] | None = None
     error: str | None = None
+
+
+# ============================================================================
+# Health Schemas
+# ============================================================================
+
+class DatabaseHealth(BaseModel):
+    status: str = Field(description="Database connectivity status ('healthy' or 'unhealthy')")
+    latency_ms: float | None = Field(default=None, description="Database ping latency in milliseconds")
+    error: str | None = Field(default=None, description="Error message if database query failed")
+
+
+class StorageHealth(BaseModel):
+    status: str = Field(description="Storage status ('healthy', 'degraded', or 'unhealthy')")
+    images_dir_writable: bool = Field(description="Whether the local image cache directory is writable")
+    cached_images_count: int = Field(description="Total number of cached image assets on disk")
+    cache_size_mb: float = Field(description="Total size of cached images in megabytes")
+    free_disk_gb: float | None = Field(default=None, description="Free disk space in gigabytes on data drive")
+    error: str | None = Field(default=None, description="Error message if disk inspection failed")
+
+
+class HealthResponse(BaseModel):
+    status: str = Field(description="Overall system health status ('ok', 'degraded', or 'unhealthy')")
+    timestamp: datetime = Field(description="Current UTC timestamp of the health check")
+    version: str = Field(default="1.0.0", description="API version")
+    database: DatabaseHealth = Field(description="Database health details")
+    storage: StorageHealth = Field(description="Disk and image cache storage health details")
+    scheduler_active: bool = Field(description="Whether the background APScheduler is running")
+    is_sync_running: bool = Field(description="Whether a banner scraping job is currently executing")
+

@@ -494,4 +494,117 @@ def test_game_agnostic_extra_data_and_filtering(test_db):
     assert cards[0].extra_data["card_type"] == "Wit"
 
 
+def test_multi_featured_five_star_banner_deduplication_and_order_invariance(test_db):
+    """
+    Test that weapon banners with 2 featured 5★ weapons (e.g. Epitome Invocation)
+    deduplicate cleanly even if the rewards are scraped in reverse order on subsequent runs.
+    """
+    # 1. Initial scrape: Weapon A first, Weapon B second
+    w_banner_v1 = Banner(
+        version="4.6",
+        banner_type=BannerType.LIMITED_WEAPON,
+        limited_rewards=[
+            Reward(name="Crimson Moon's Semblance", rarity=5, is_featured=True),
+            Reward(name="The First Great Magic", rarity=5, is_featured=True),
+        ],
+        low_rate_rewards=[
+            Reward(name="Favonius Sword", rarity=4, is_featured=False),
+        ],
+        start_date=datetime(2024, 4, 24, 6, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2024, 5, 14, 17, 59, 59, tzinfo=timezone.utc),
+        phase=1,
+    )
+    service.save_banners_to_db([w_banner_v1], "Genshin Impact")
+
+    banners, total = service.get_banners("Genshin Impact", banner_type=BannerType.LIMITED_WEAPON)
+    assert total == 1
+    assert len(banners[0].limited_rewards) == 2
+
+    # 2. Subsequent scrape: Weapon B listed first, Weapon A second, with additional rate up info
+    w_banner_v2 = Banner(
+        version="4.6",
+        banner_type=BannerType.LIMITED_WEAPON,
+        limited_rewards=[
+            Reward(name="The First Great Magic", rarity=5, is_featured=True, extra_data={"type": "Bow"}),
+            Reward(name="Crimson Moon's Semblance", rarity=5, is_featured=True, extra_data={"type": "Polearm"}),
+        ],
+        low_rate_rewards=[
+            Reward(name="Favonius Sword", rarity=4, is_featured=False),
+            Reward(name="The Bell", rarity=4, is_featured=False),
+        ],
+        start_date=datetime(2024, 4, 24, 6, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2024, 5, 14, 17, 59, 59, tzinfo=timezone.utc),
+        phase=1,
+    )
+    service.save_banners_to_db([w_banner_v2], "Genshin Impact")
+
+    # Verify that NO duplicate banner was created
+    banners_after, total_after = service.get_banners("Genshin Impact", banner_type=BannerType.LIMITED_WEAPON)
+    assert total_after == 1
+    assert len(banners_after) == 1
+
+    saved_banner = banners_after[0]
+    assert len(saved_banner.limited_rewards) == 2
+    assert len(saved_banner.low_rate_rewards) == 2
+
+    # Verify both weapons are properly registered in Item table as WEAPON
+    weapons = service.get_game_items("Genshin Impact", item_type="WEAPON")
+    weapon_names = [w.name for w in weapons]
+    assert "Crimson Moon's Semblance" in weapon_names
+    assert "The First Great Magic" in weapon_names
+    assert "Favonius Sword" in weapon_names
+    assert "The Bell" in weapon_names
+
+
+def test_chronicled_multi_character_banner_deduplication(test_db):
+    """
+    Test that Chronicled Wish banners with 3+ featured 5★ characters deduplicate properly.
+    """
+    c_banner_1 = Banner(
+        version="4.5",
+        banner_type=BannerType.CHRONICLED,
+        limited_rewards=[
+            Reward(name="Diluc", rarity=5, is_featured=True),
+            Reward(name="Jean", rarity=5, is_featured=True),
+            Reward(name="Mona", rarity=5, is_featured=True),
+            Reward(name="Klee", rarity=5, is_featured=True),
+            Reward(name="Albedo", rarity=5, is_featured=True),
+            Reward(name="Eula", rarity=5, is_featured=True),
+        ],
+        low_rate_rewards=[],
+        start_date=datetime(2024, 3, 13, 6, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2024, 4, 2, 17, 59, 59, tzinfo=timezone.utc),
+        phase=1,
+    )
+    service.save_banners_to_db([c_banner_1], "Genshin Impact")
+
+    banners, total = service.get_banners("Genshin Impact", banner_type=BannerType.CHRONICLED)
+    assert total == 1
+    assert len(banners[0].limited_rewards) == 6
+
+    # Re-saving with enriched metadata
+    c_banner_2 = Banner(
+        version="4.5",
+        banner_type=BannerType.CHRONICLED,
+        limited_rewards=[
+            Reward(name="Eula", rarity=5, is_featured=True, extra_data={"element": "Cryo"}),
+            Reward(name="Albedo", rarity=5, is_featured=True, extra_data={"element": "Geo"}),
+            Reward(name="Klee", rarity=5, is_featured=True, extra_data={"element": "Pyro"}),
+            Reward(name="Mona", rarity=5, is_featured=True, extra_data={"element": "Hydro"}),
+            Reward(name="Jean", rarity=5, is_featured=True, extra_data={"element": "Anemo"}),
+            Reward(name="Diluc", rarity=5, is_featured=True, extra_data={"element": "Pyro"}),
+        ],
+        low_rate_rewards=[],
+        start_date=datetime(2024, 3, 13, 6, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2024, 4, 2, 17, 59, 59, tzinfo=timezone.utc),
+        phase=1,
+    )
+    service.save_banners_to_db([c_banner_2], "Genshin Impact")
+
+    banners_after, total_after = service.get_banners("Genshin Impact", banner_type=BannerType.CHRONICLED)
+    assert total_after == 1
+    assert len(banners_after[0].limited_rewards) == 6
+
+
+
 

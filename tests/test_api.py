@@ -38,7 +38,37 @@ def api_client():
 def test_health_check(api_client):
     response = api_client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["database"]["status"] == "healthy"
+    assert data["database"]["latency_ms"] is not None
+    assert data["storage"]["status"] in ("healthy", "degraded")
+    assert "images_dir_writable" in data["storage"]
+    assert "timestamp" in data
+
+
+def test_health_check_db_failure():
+    # Test that a failed DB query reports unhealthy status and HTTP 503
+    def broken_get_db():
+        class BrokenSession:
+            def execute(self, *args, **kwargs):
+                raise RuntimeError("Simulated DB connection failure")
+            def close(self):
+                pass
+        yield BrokenSession()
+
+    app.dependency_overrides[database.get_db] = broken_get_db
+    try:
+        client = TestClient(app)
+        response = client.get("/health")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["status"] == "unhealthy"
+        assert data["database"]["status"] == "unhealthy"
+        assert "Simulated DB connection failure" in data["database"]["error"]
+    finally:
+        app.dependency_overrides.clear()
+
 
 
 def test_post_banners_endpoint(api_client):
